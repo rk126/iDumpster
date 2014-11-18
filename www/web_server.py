@@ -2,6 +2,7 @@ import os
 from flask import Flask, render_template
 import json
 
+import time
 
 # Create a web application
 app = Flask(__name__)
@@ -18,23 +19,34 @@ app.config.from_envvar('FLASKR_SETTINGS', silent=True)
 
 @app.route('/dumpsters.json')
 def get_dumpster_data():
+  s = int(time.time() % 10)
   return json.dumps([
                       {"name": "Dumpster 1",
-                       "value": 100,
+                       "value": s,
                        "location": "(1, 3)"},
                       {"name": "Dumpster 2",
-                       "value": 50,
+                       "value": s*2,
                        "location": "(5, 7)"}])
 
 @app.route('/trucks.json')
 def get_truck_data():
-  return json.dumps([
-                      {"name": "Truck 1",
-                       "status": "Awaiting Task",
-                       "location": "(6, 3)"},
-                      {"name": "Truck 2",
-                       "status": "Discovering the meaning of life",
-                       "location": "(7, 7)"}])
+  s = int(time.time() % 10)
+  if s > 5:
+    return json.dumps([
+                        {"name": "Truck 1",
+                         "status": "Awaiting Task",
+                         "location": "(6, 3)"},
+                        {"name": "Truck 2",
+                         "status": "Discovering the meaning of life",
+                         "location": "(7, 7)"}])
+  else:
+    return json.dumps([
+                    {"name": "Truck 1",
+                     "status": "Found a task",
+                     "location": "(4, 4)"},
+                    {"name": "Truck 2",
+                     "status": "Pondering Situation",
+                     "location": "(3, 3)"}])
 
 @app.route('/')
 def show_home():
