@@ -4,11 +4,11 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="author" content="">
+    <meta name="iDumpster Runtime Display" content="">
+    <meta name="Bryse Flowers" content="">
     <link rel="icon" href="../../favicon.ico">
 
-    <title>iDumpster Documentation</title>
+    <title>iDumpster Runtime</title>
 
 <!-- Bootstrap -->
     <!-- Latest compiled and minified CSS -->
@@ -43,29 +43,7 @@
             </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="table table-striped">
-              <thead>
-                <tr>
-                  <th>Dumpster Name</th>
-                  <th>Location</th>
-                  <th>Amount of Trash</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Dumpster 1</td>
-                  <td>(1, 3)</td>
-                  <td>50</td>
-                </tr>
-                <tr>
-                  <td>Dumpster 2</td>
-                  <td>(5, 7)</td>
-                  <td>100</td>
-                </tr>
-              </tbody>
-            </table>
-          </div> <!-- table responsive -->
+          <div id="dumpsters"></div>
 
           <div class="table-responsive">
             <table class="table table-striped">
@@ -106,5 +84,12 @@
     <!-- Include all compiled plugins (below), or include individual files as needed -->
     <!-- Latest compiled and minified JavaScript -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/js/bootstrap.min.js"></script>
+
+    <!-- React JS -->
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/react/0.11.1/react.js"></script>
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/react/0.11.1/JSXTransformer.js"></script>
+
+    <!-- Load Custom Code -->
+    <script type="text/jsx" src="/static/js/dumpsters.js"></script>
   </body>
 </html>

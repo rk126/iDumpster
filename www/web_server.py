@@ -1,5 +1,6 @@
 import os
 from flask import Flask, render_template
+import json
 
 
 # Create a web application
@@ -14,6 +15,26 @@ app.config.update(dict(
     PASSWORD='default'
 ))
 app.config.from_envvar('FLASKR_SETTINGS', silent=True)
+
+@app.route('/dumpsters.json')
+def get_dumpster_data():
+  return json.dumps([
+                      {"name": "Dumpster 1",
+                       "value": 100,
+                       "location": "(1, 3)"},
+                      {"name": "Dumpster 2",
+                       "value": 50,
+                       "location": "(5, 7)"}])
+
+@app.route('/trucks.json')
+def get_truck_data():
+  return json.dumps([
+                      {"name": "Truck 1",
+                       "status": "Awaiting Task",
+                       "location": "(6, 3)"},
+                      {"name": "Truck 2",
+                       "status": "Discovering the meaning of life",
+                       "location": "(7, 7)"}])
 
 @app.route('/')
 def show_home():
