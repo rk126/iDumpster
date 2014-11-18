@@ -1,19 +1,19 @@
 /**
  * @jsx React.DOM
  */
-var Dumpster = React.createClass({
+var Truck = React.createClass({
   render: function() {
     return (
       <tr>
         <td>{this.props.name}</td>
         <td>{this.props.location}</td>
-        <td>{this.props.value}</td>
+        <td>{this.props.status}</td>
       </tr>
     );
   }
 });
 
-var DumpsterTable = React.createClass({
+var TruckTable = React.createClass({
   loadStatusFromServer: function() {
     $.ajax({
       url: this.props.url,
@@ -34,9 +34,9 @@ var DumpsterTable = React.createClass({
     setInterval(this.loadStatusFromServer, this.props.pollInterval);
   },
   render: function() {
-    var dumpsterNodes = this.state.data.map(function(dumpster, index) {
+    var truckNodes = this.state.data.map(function(truck, index) {
       return (
-        <Dumpster name={dumpster.name} location={dumpster.location} value={dumpster.value} key={index} />
+        <Truck name={truck.name} location={truck.location} status={truck.status} key={index} />
       );
     });
     return (
@@ -44,13 +44,13 @@ var DumpsterTable = React.createClass({
         <table className="table table-striped">
           <thead>
             <tr>
-              <th>Dumpster Name</th>
+              <th>Truck Name</th>
               <th>Location</th>
               <th>Value</th>
             </tr>
           </thead>
           <tbody>
-            {dumpsterNodes}
+            {truckNodes}
           </tbody>
         </table>
       </div>
@@ -59,6 +59,6 @@ var DumpsterTable = React.createClass({
 });
 
 React.renderComponent(
-  <DumpsterTable url="dumpsters.json" pollInterval={1000} />,
-  document.getElementById('dumpsters')
+  <TruckTable url="trucks.json" pollInterval={1000} />,
+  document.getElementById('trucks')
 );
