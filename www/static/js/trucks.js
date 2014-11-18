@@ -44,9 +44,9 @@ var TruckTable = React.createClass({
         <table className="table table-striped">
           <thead>
             <tr>
-              <th>Truck Name</th>
-              <th>Location</th>
-              <th>Value</th>
+              <th className="col-md-3">Truck Name</th>
+              <th className="col-md-3">Location</th>
+              <th className="col-md-3">Value</th>
             </tr>
           </thead>
           <tbody>
