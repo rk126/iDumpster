@@ -46,7 +46,7 @@ var TruckTable = React.createClass({
             <tr>
               <th className="col-md-3">Truck Name</th>
               <th className="col-md-3">Location</th>
-              <th className="col-md-3">Value</th>
+              <th className="col-md-3">Status</th>
             </tr>
           </thead>
           <tbody>
