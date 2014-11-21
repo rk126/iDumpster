@@ -145,7 +145,6 @@ try:
             # Read level
             level.insert(0,read_Sensor()) #inserts new reading at start of list
             level.pop() #removes last item in list
-            print level
 
             #compute average of previous 5 values
             x = float(sum(level))
