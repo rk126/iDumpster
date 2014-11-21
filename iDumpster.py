@@ -39,16 +39,20 @@ def read_Sensor():
 
 def get_credentials(cmd_cred):
     '''Translate a <username>:<password> string to a Pika credential'''
-    cred_re = r"(?P<un>.+)[:](?P<pw>.+)"
+    if isinstance(cmd_cred, str):
+        cred_re = r"(?P<un>.+)[:](?P<pw>.+)"
 
-    match = re.search(cred_re, cmd_cred)
+        match = re.search(cred_re, cmd_cred)
 
-    if match:
-        return pika.PlainCredentials(match.group("un"),
-                                     match.group("pw"),
-                                     True)
-    else:
-        raise RuntimeError("Credentials Failed Regex Validation")
+        if match:
+            return pika.PlainCredentials(match.group("un"),
+                                         match.group("pw"),
+                                         True)
+        else:
+            raise RuntimeError("Credentials Failed Regex Validation")
+
+    # Guest Credentials as None
+    return None
 
 # Application Entry Point
 # ^^^^^^^^^^^^^^^^^^^^^^^
@@ -68,7 +72,7 @@ try:
             metavar="virtual host", default="/", type=str)
     parser.add_argument("-c", "--credentials",
             help="Credentials to use when logging in to message broker",
-            metavar="login:password", default="guest:guest", type=str)
+            metavar="login:password", default=None)
     parser.add_argument("-k", "--key",
             help="The routing key for publishing messages to the message broker",
             metavar="routing key", default="iDumpster", type=str, required=True)
