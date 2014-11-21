@@ -15,7 +15,6 @@ from random import randint
 
 # Global variable that controls running the app
 publish_levels = True
-result = 1
 def stop_dumpster_service(signal, frame):
     """
     A signal handler, that will cause the main execution loop to stop
@@ -35,7 +34,6 @@ def read_Sensor():
 
     :return: (val) The value returned will represent the level in the dumpster
     """
-    global result
     result = randint(1,9)
     return result
 
@@ -123,7 +121,7 @@ try:
         # Use the virtual host (vhost) and credential information (credentials),
         # if provided
         message_broker = pika.BlockingConnection(pika.ConnectionParameters(
-                host,virtual_host=vhost,credentials=credentials))
+                         host,virtual_host=vhost,credentials=credentials))
         # Setup the channel and exchange
         channel = message_broker.channel()
         channel.exchange_declare(exchange='dumpster_data',type='direct')
@@ -137,7 +135,6 @@ try:
         for i in range(0,5):
             level.insert(0,read_Sensor())
             time.sleep(2)
-        print level
 
         # Loop until the application is asked to quit
         while(publish_levels):
@@ -150,7 +147,7 @@ try:
             x = float(sum(level))
             y = float(len(level))
             dumpster_data['level'] = x/y
-            print dumpster_data['level']
+
             #   Publish the message (utilization_msg) in JSON format to the
             #   broker under the user specified topic.
             data = json.dumps(dumpster_data,indent=4,sort_keys=True)#put dict into JSON format
