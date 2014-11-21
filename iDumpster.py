@@ -96,7 +96,7 @@ try:
     credentials = get_credentials(args.credentials)
     topic = args.key
     capacity = args.capacity
-    location = [args.locx, args.locy]
+    location = [str(args.locx), str(args.locy)]
 
     # Ensure that the user specified the required arguments
     if location[0] < 0 or location[1] < 0:
