@@ -99,7 +99,7 @@ try:
     location = [str(args.locx), str(args.locy)]
 
     # Ensure that the user specified the required arguments
-    if location[0] < 0 or location[1] < 0:
+    if args.locx < 0 or args.locy < 0:
         print "You must specify a valid x,y coordinate for the dumpster"
         sys.exit()
 
