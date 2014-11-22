@@ -11,10 +11,12 @@ import signal
 import sys
 import time
 import json
-from random import randint
+from VCNL4000 import VCNL4000
+import time
 
 # Global variable that controls running the app
 publish_levels = True
+
 def stop_dumpster_service(signal, frame):
     """
     A signal handler, that will cause the main execution loop to stop
@@ -27,14 +29,29 @@ def stop_dumpster_service(signal, frame):
     """
     global publish_levels
     publish_levels = False
-
+    
+# Initialise the VNCL4000 sensor
+vcnl = VCNL4000(0x13)
+result = 0
 def read_Sensor():
     """
     Returns a value with the dumpster level
 
     :return: (val) The value returned will represent the level in the dumpster
     """
-    result = randint(1,9)
+    global result
+    try:
+        x = vcnl.read_proximity()
+        if x <= 2290:
+                result = 0
+        elif x >= 2300 and x <= 2350:
+                result = 0.33
+        elif x >= 2380 and x <= 2460:
+                result = 0.66
+        elif x >= 2950:
+                result = 1
+    except Exception:
+        return result #if I2C doesn't respond, result value doesn't change
     return result
 
 def get_credentials(cmd_cred):
@@ -133,25 +150,16 @@ try:
         location = ','.join(location) #make location a string
         # Create a data structure to hold the dumpster data
         dumpster_data = {'capacity': capacity, 'level': None, 'location': location}
-        # Create a list of levels so level can be averaged over past 5 values
-        level = []
-        #grab first 5 values for level data
-        for i in range(0,5):
-            level.insert(0,read_Sensor())
-            time.sleep(2)
 
         # Loop until the application is asked to quit
         while(publish_levels):
-            # Read level
-            level.insert(0,read_Sensor()) #inserts new reading at start of list
-            level.pop() #removes last item in list
+            
+            #read sensor level
+            level = read_Sensor()
+            dumpster_data['level'] = level
+            time.sleep(2)
 
-            #compute average of previous 5 values
-            x = float(sum(level))
-            y = float(len(level))
-            dumpster_data['level'] = x/y
-
-            #   Publish the message (utilization_msg) in JSON format to the
+            #   Publish the message in JSON format to the
             #   broker under the user specified topic.
             data = json.dumps(dumpster_data,indent=4,sort_keys=True)#put dict into JSON format
 
