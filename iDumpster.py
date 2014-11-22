@@ -42,11 +42,11 @@ def read_Sensor():
     global result
     try:
         x = vcnl.read_proximity()
-        if x <= 2290:
+        if x <= 2280:
                 result = 0
-        elif x >= 2300 and x <= 2350:
+        elif x >= 2290 and x <= 2399:
                 result = 0.33
-        elif x >= 2380 and x <= 2460:
+        elif x >= 2400 and x <= 2550:
                 result = 0.66
         elif x >= 2950:
                 result = 1
