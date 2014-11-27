@@ -12,9 +12,14 @@ import sys
 import time
 import json
 from random import randint
+from random import uniform
+from util.component import component_type
+from util.component import EnumEncoder
 
 # Global variable that controls running the app
 publish_levels = True
+prev_sensor_value = 0
+
 def stop_dumpster_service(signal, frame):
     """
     A signal handler, that will cause the main execution loop to stop
@@ -34,8 +39,14 @@ def read_Sensor():
 
     :return: (val) The value returned will represent the level in the dumpster
     """
-    result = randint(1,9)
-    return result
+    global prev_sensor_value
+    result = prev_sensor_value + uniform(0, 0.75)
+    if result <= 10:
+      prev_sensor_value = result
+      return result
+    else:
+      print "Overflowing Dumpster!"
+      return 10
 
 def get_credentials(cmd_cred):
     '''Translate a <username>:<password> string to a Pika credential'''
@@ -130,9 +141,10 @@ try:
         channel = message_broker.channel()
         channel.exchange_declare(exchange='dumpster_data',type='direct')
 
-        location = ','.join(location) #make location a string
+        # location = ','.join(location) #make location a string
+        location_dict = {"x": int(location[0]), "y": int(location[1])}
         # Create a data structure to hold the dumpster data
-        dumpster_data = {'capacity': capacity, 'level': None, 'location': location}
+        dumpster_data = {'capacity': capacity, 'level': None, 'location': location_dict, 'type': component_type.Dumpster}
         # Create a list of levels so level can be averaged over past 5 values
         level = []
         #grab first 5 values for level data
@@ -153,7 +165,8 @@ try:
 
             #   Publish the message (utilization_msg) in JSON format to the
             #   broker under the user specified topic.
-            data = json.dumps(dumpster_data,indent=4,sort_keys=True)#put dict into JSON format
+            #   cls=EnumEncoder from stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
+            data = json.dumps(dumpster_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
 
             channel.basic_publish(exchange = 'dumpster_data', routing_key = topic,
                                   body = data)

@@ -38,3 +38,13 @@ optional arguments:
   -x x, --locx x        Fake location of the dumpster on x axis
   -y y, --locy y        Fake location of the dumpster on y axis
 
+iDumpster_central
+=================
+
+A * search module and the web-server
+
+# Dependencies
+
+- PyYAML
+- enum34
+    - sudo pip install enum34
