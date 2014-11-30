@@ -16,6 +16,7 @@ from structs import draw_grid
 import logging
 
 TEST_PROGRAM_ACTIVE = 1
+FUEL_COST_PER_STEP = 2
 
 class A_Star_Search:
   __came_from = {}
@@ -44,10 +45,14 @@ class A_Star_Search:
       path.append(current)
     return path
 
-  def heuristic(self, a, b):
+  def distance_estimate(self, a, b):
     (x1, y1) = a
     (x2, y2) = b
-    return abs(pow(x1, 2) - pow(x2, 2)) + abs(pow(y1, 2) - pow(y2, 2))
+    estimated_distance = abs(pow(x1, 1) - pow(x2, 1)) + abs(pow(y1, 1) - pow(y2, 1))
+    return estimated_distance
+
+  def fuel_estimate(self, a, b):
+    return self.distance_estimate(a, b) * FUEL_COST_PER_STEP
 
   def a_star_search(self, graph, start, goal):
     frontier = PriorityQueue()
@@ -56,6 +61,8 @@ class A_Star_Search:
     cost_so_far = {}
     came_from[start] = None
     cost_so_far[start] = 0
+    # TODO change cost_so_far[start] to account for fuel cost
+    # cost_so_far[start] = self.__compA.getFuelStatus()
 
     while not frontier.empty():
       current = frontier.get()
@@ -64,10 +71,10 @@ class A_Star_Search:
         break
 
       for next in graph.neighbors(current):
-        new_cost = cost_so_far[current] + graph.cost(current, next)
+        new_cost = cost_so_far[current] + graph.default_cost(current, next) + graph.distance_cost(current, next) + graph.fuel_cost(current, next)
         if next not in cost_so_far or new_cost < cost_so_far[next]:
           cost_so_far[next] = new_cost
-          priority = new_cost + self.heuristic(goal, next)
+          priority = new_cost + self.distance_estimate(goal, next) + self.fuel_estimate(goal, next) # heuristics
           frontier.put(next, priority)
           came_from[next] = current
 

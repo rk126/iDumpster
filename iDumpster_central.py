@@ -5,7 +5,6 @@
 # It is responsible to maintain the state information of the RPi server
 
 
-import logging
 import argparse
 import re
 import json
@@ -14,20 +13,19 @@ import pika.channel
 import pika.exceptions
 import signal
 import sys
-from util.component import truck
-from util.component import dumpster
-from util.component import environment_state
+import os
+
+import util.component
+from util.component import Map
+from util.component import Truck
+from util.component import Dumpster
+from util.component import State
+
 from util.component import as_enum
 from util.component import component_type
-from a_star.structs import GridWithWeights
+from util.grid_structs import GridWithWeights
 from a_star.path_finder import A_Star_Search
-
-# Create truck1
-# truck1 = truck(name="truck1", location=(1, 0), status="Just got created", fuelFilled=120, fuelCapacity=150)
-
-# Create dumpster1
-# dumpster1 = dumpster(name="dumpster1", location=(3, 4), capacity=1000)
-# dumpster1.updateTrashLevel(1.5)
+import logging
 
 class iDumpsterServerChannelHelper:
   """
@@ -60,6 +58,25 @@ class iDumpsterServerChannelHelper:
     # Attempt to gracefully stop pika's event loop whenever a SIGINT is encountered
     self.__channel.stop_consuming()
 
+def get_log_level(verbosity):
+  """
+  Parses an integer value between (0-4) to get the verbosity level
+
+  :param verbosity: (int) Integer value between 0 - 4
+  :return logging.LEVELS where LEVELS are defined inside logging module
+  """
+  if isinstance(verbosity, int):
+    if verbosity == 0:
+        return logging.CRITICAL
+    elif verbosity == 1:
+        return logging.ERROR
+    elif verbosity == 2:
+        return logging.WARNING
+    elif verbosity == 3:
+        return logging.INFO
+    else:
+        return logging.DEBUG
+  return logging.DEBUG
 
 def get_credentials(cred_cmd):
   """
@@ -79,8 +96,8 @@ def get_credentials(cred_cmd):
     else:
       raise RuntimeError("Credentials Failed Regex Validation")
 
-    # Guest Credentials as None
-    return None
+  # Guest Credentials as None
+  return None
 
 def get_dimensions(map_size_cmd):
   """
@@ -98,10 +115,10 @@ def get_dimensions(map_size_cmd):
     else:
       raise RuntimeError("Map Size Failed Regex Validation")
 
-    # Default Map size as (10, 10)
-    return (10, 10)
+  # Default Map size as (10, 10)
+  return (10, 10)
 
-def monitor_dumpster_levels(channel, delivery_info, msg_properties, msg):
+def monitor_components(channel, delivery_info, msg_properties, msg):
   """
   Event handler that processes new messages from the message broker
 
@@ -121,60 +138,64 @@ def monitor_dumpster_levels(channel, delivery_info, msg_properties, msg):
     # Check that the message appears to be well formed
 
     if "type" not in status_msg:
-        logger.warn("Ignoring message: Unknown message type")
+        logging.warning("Ignoring message: Unknown message type")
 
     elif status_msg["type"] == component_type.Dumpster:
         if "capacity" not in status_msg:
-            logger.warn("Ignoring message: Missing 'capacity' field")
+            logging.warning("Ignoring message: Missing 'capacity' field")
         elif "location" not in status_msg:
-            logger.warn("Ignoring message: Missing 'location' field")
+            logging.warning("Ignoring message: Missing 'location' field")
         elif "level" not in status_msg:
-            logger.warn("Ignoring message: Missing 'level' field")
+            logging.warning("Ignoring message: Missing 'level' field")
         else:
-            current_state = environment_current_state.getCurrentState()
-            # logger.info("Dumpster data received")
-            current_dumpster = dumpster(name=delivery_info.routing_key, location=status_msg["location"], capacity=status_msg["capacity"], level=status_msg["level"])
-            if delivery_info.routing_key not in current_state:
-                environment_current_state.add_component(current_dumpster)
-                current_state = environment_current_state.getCurrentState()
-            else:
-                current_state = environment_current_state.updateComponentValue(current_dumpster, "level", status_msg["level"])
-                current_state = environment_current_state.updateComponentLocation(current_dumpster, status_msg["location"])
+            logging.info("Dumpster data received")
+            current_dumpster = Dumpster(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["capacity"], trash_level=status_msg["level"])
+            logging.info("Storing dumpster data in the state variable")
+            environment_current_state.put(current_dumpster)
+
             if current_dumpster.getTrashLevel() > current_dumpster.ThresholdLevel:
                 # Call A* search functions to start finding optimized, currently assuming there is a truck in the state variable.
                 # In actual program we will pick up a truck that is nearest and has good amount of fuel and is less filled with trash
                 # In actual program we will pick up this info from the state information
-                current_truck = truck(name="truck1", location={"x": 17,"y": 19}, status=9, fuelCapacity=150, fuelFilled=110)
+                current_truck = Truck(name="truck1", location={"x": 17,"y": 19}, fuel_level=9, fuel_capacity=150, trash_level=1, trash_capacity=400)
                 global a_star_running
                 if not a_star_running:
-                    A_Star_Search(environment_map, current_truck, current_dumpster)
+                    a_star_instance = A_Star_Search(environment_map.graph, current_truck, current_dumpster)
+                    logging.info("Cost at the beginning: " + str(a_star_instance.get_cost_so_far(current_truck.getLocation())))
+                    logging.info("Cost at the end: " + str(a_star_instance.get_cost_so_far(current_dumpster.getLocation())))
                     a_star_running = 1
 
     elif status_msg["type"] == component_type.Truck:
-        if "status" not in status_msg:
-            logger.warn("Ignoring message: Missing 'status' field")
+        logger.info("Truck Message Received")
+        if "trash_capacity" not in status_msg:
+            logging.warning("Ignoring Truck message: Missing 'trash_capacity' field")
         elif "location" not in status_msg:
-            logger.warn("Ignoring message: Missing 'location' field")
+            logging.warning("Ignoring Truck message: Missing 'location' field")
+        elif "trash_level" not in status_msg:
+            logging.warning("Ignoring Truck message: Missing 'trash_level' field")
+        elif "fuel_capacity" not in status_msg:
+            logging.warning("Ignoring Truck message: Missing 'fuel_capacity' field")
+        elif "fuel_level" not in status_msg:
+            logging.warning("Ignoring Truck message: Missing 'fuel_level' field")
         else:
-            logger.info("Truck  data received")
+            current_truck = Truck(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["trash_capacity"], trash_level=status_msg["trash_level"], fuel_level=status_msg["fuel_level"], fuel_capacity=status_msg["fuel_capacity"])
+            logging.info("Storing truck data in the state variable")
+            environment_current_state.put(current_truck)
     else:
-        logger.warn("Unknown type message received")
+        logging.warning("Ignoring message: Unknown type message received")
 
   except ValueError, ve:
     # Thrown by json.loads() if it couldn't parse a JSON object
-    logger.warn("Discarding Message: received message couldn't be parsed")
+    logging.warning("Discarding Message: received message couldn't be parsed")
   except NameError, ne:
-    logger.error("Name Error has occured " + str(ne.message))
+    logging.error("Name Error has occured " + str(ne.message))
   except Exception, eee:
-    logger.error("Unknown Error has occured " + str(eee.message))
+    logging.error("Unknown Error has occured " + str(eee.message))
 
 # Application Entry Point
 # ^^^^^^^^^^^^^^^^^^^^^^
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-environment_current_state = environment_state()
+environment_current_state = State()
 global a_star_running
 a_star_running = 0
 
@@ -188,6 +209,7 @@ try:
   parser.add_argument("-p", "--virtual_host", help="Virtual host to connect to the message broker", metavar="virtual host", default="/", type=str)
   parser.add_argument("-c", "--credentials", help="Credentials to use when logging in to the message broker", metavar="login:password", default=None, type=str)
   parser.add_argument("-k", "--routing_key", help="The routing key that are subscribed to the message broker", metavar="routing key", nargs="*", default="iDumpster", type=str, required=True)
+  parser.add_argument("-v", "--verbosity", help="The verbosity levels of logging ranging from 0 for ONLY CRITICAL logging to 4 for DEBUG", metavar="verbosity", default=4)
   # Parsing map dimensions using argparser,
   # TODO read it using yaml so that even map environment can be loaded, else have to parse everything through command line which is cumbersome
   parser.add_argument("-s", "--map_size", help="The mxn dimension map size that will be generated at start", metavar="map dimensions", default="10x10", type=str, required=True)
@@ -204,12 +226,21 @@ try:
   topics = args.routing_key
   map_size = args.map_size
 
+  verbosity = int(args.verbosity)
+  log_level = get_log_level(verbosity)
+
   # Get both m and n dimensions of the map
   (m, n) = get_dimensions(map_size)
 
-  environment_map = GridWithWeights(m, n)
+  # Bryse Flowers verbosity level code
 
-  logger.info("Before channel creation")
+  logging_format = '%(asctime)s ' + '%(msecs)d' + ' -- ' + '%(funcName)s(%(lineno)d)' + ' -- ' + ' %(levelname)s ' + ' -- ' + '%(message)s'
+  logging_date_format = '%I:%M:%S %p'
+  logging.basicConfig(level=log_level, format=logging_format, datefmt=logging_date_format)
+
+  logging.info("I am here")
+
+  environment_map = Map(m, n)
 
   message_broker = None
   channel = None
@@ -221,15 +252,15 @@ try:
     pika_parameters = pika.ConnectionParameters(host=host, virtual_host=vhost, credentials=credentials)
     message_broker = pika.BlockingConnection(pika_parameters)
 
-    logger.info("A blocking connection named message_broker successfully created, now creating a channel")
+    logging.info("A blocking connection named message_broker successfully created, now creating a channel")
 
     # Setup the channel and exchange
     channel = message_broker.channel()
-    logger.info("Channel created, now declaring exchange 'dumpster_data' of type 'direct'")
+    logging.info("Channel created, now declaring exchange 'dumpster_data' of type 'direct'")
 
     # Exchange declaration, NOTE that this exchange is not a durable one
     channel.exchange_declare(exchange='dumpster_data', type='direct')
-    logger.info("Exchange declared successfully, now declaring an exclusive queue")
+    logging.info("Exchange declared successfully, now declaring an exclusive queue")
 
 
     # Setup signal handlers to shutdown this app when SIGINT or SIGTERM is sent to this app
@@ -242,7 +273,7 @@ try:
       signal.signal(signal_num, channel_manager.stop_iDumpster_server)
 
     except ValueError, ve:
-      logger.warn("Graceful shutdown may not be possible: Unsupported Signal: " + signal_num)
+      logging.warning("Graceful shutdown may not be possible: Unsupported Signal: " + signal_num)
 
     # Create a queue
     # -------------------------
@@ -250,63 +281,63 @@ try:
 
     result = channel.queue_declare(exclusive=True)
     queue_name = result.method.queue
-    logger.info("An exclusive queue declared successfully, now binding the queue and the exchange with the given routing key(s)")
+    logging.info("An exclusive queue declared successfully, now binding the queue and the exchange with the given routing key(s)")
 
     # Bind your queue to the message exchange, and register your new message event handler
     for topic in topics:
       channel.queue_bind(exchange='dumpster_data', queue=queue_name, routing_key=topic)
-    logger.info("Binding of exchange with the declared queue successful, now start pika's event loop by calling channel.basic_consume")
+    logging.info("Binding of exchange with the declared queue successful, now start pika's event loop by calling channel.basic_consume")
 
     # Start pika's event loop
-    channel.basic_consume(monitor_dumpster_levels, queue=queue_name, no_ack=True)
+    channel.basic_consume(monitor_components, queue=queue_name, no_ack=True)
 
     # Start pika's event loop
-    logger.info("Pika's event loop started")
+    logging.info("Pika's event loop started")
 
     channel.start_consuming()
 
   except pika.exceptions.ProbableAccessDeniedError, pade:
-    logger.error("A Probable Access Denied Error occurred: " + str(pade.message))
-    logger.info("Please enter a valid virtual host in the format '-p validhost'")
+    logging.error("A Probable Access Denied Error occurred: " + str(pade.message))
+    logging.info("Please enter a valid virtual host in the format '-p validhost'")
 
   except pika.exceptions.ProbableAuthenticationError, paue:
-    logger.error("A Probable Authentication Error occurred: " + str(paue.message))
-    logger.info("Please enter valid credentials in the format '-c username:password'")
+    logging.error("A Probable Authentication Error occurred: " + str(paue.message))
+    logging.info("Please enter valid credentials in the format '-c username:password'")
 
   except pika.exceptions.AMQPChannelError, ache:
-    logger.error("An AMQP Channel Error occurred: " + str(ache.message))
+    logging.error("An AMQP Channel Error occurred: " + str(ache.message))
 
   except pika.exceptions.AMQPConnectionError, acoe:
-    logger.error("An AMQP Connection Error occurred: " + str(acoe.message))
-    logger.info("Please enter a valid RabbitMQ hostname in the format '-b RabbitMQHost'")
+    logging.error("An AMQP Connection Error occurred: " + str(acoe.message))
+    logging.info("Please enter a valid RabbitMQ hostname in the format '-b RabbitMQHost'")
 
   except pika.exceptions.ChannelError, ce:
-    logger.error("A Channel error occurred: " + str(ce.message))
+    logging.error("A Channel error occurred: " + str(ce.message))
 
   except pika.exceptions.AMQPError, ae:
-    logger.error("An AMQP error occurred: " + str(ae.message))
+    logging.error("An AMQP error occurred: " + str(ae.message))
 
   # General catch-all handler is our last resort
   except Exception, eee:
-    logger.error("An unexpected exception occurred: " + str(eee.message))
+    logging.error("An unexpected exception occurred: " + str(eee.message))
 
   finally:
     # Attempt to gracefully shutdown the connection to the message broker
     # Closing the channel gracefully
     if channel is not None:
-      logger.info("Exited pika event loop, closing channel and the message broker")
+      logging.info("Exited pika event loop, closing channel and the message broker")
       channel.close()
-      logger.info("Channel closed successfully")
+      logging.info("Channel closed successfully")
     # For closing the connection gracefully
     if message_broker is not None:
       message_broker.close()
-      logger.info("Message broker closed successfully, Shutting down gracefully!")
+      logging.info("Message broker closed successfully, Shutting down gracefully!")
     sys.exit()
 
-except NameError, ee:
-  logger.error("A NameError has occurred: It is likely that an invalid command line" + str(ne.message))
-  logger.info("Argument was passed. Please check your arguments and try again")
+except NameError, ne:
+  logging.error("A NameError has occurred: It is likely that an invalid command line" + str(ne.message))
+  logging.info("Argument was passed. Please check your arguments and try again")
   sys.exit()
 except Exception, ee:
-  logger.error("An unexpected error occurred: " + ee.message)
+  logging.error("An unexpected error occurred: " + str(ee.message))
   sys.exit()

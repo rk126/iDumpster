@@ -22,7 +22,12 @@
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 import json
+# import logging
 from enum import Enum
+from grid_structs import GridWithWeights
+
+
+FUEL_COST_PER_STEP = 2
 
 class EnumEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -41,60 +46,114 @@ class component_type(Enum):
     Dumpster = 1
     Truck = 2
 
-class environment_state:
+class State:
     def __init__(self):
         self.__state = {}
+        # logging.info("Initializing environment")
+        print "Initializing Environment State"
 
-    def isComponentPresent(self, component):
-        component_name = component.getName()
-        return component_name in self.__state
-
-    def add_component(self, component):
+    def put(self, component):
         component_name = component.getName()
         if component_name not in self.__state:
             self.__state[component_name] = component.getInfo()
+        # Updating existing component entirely
         else:
-            print "ERROR: Component already present"
+            print "WARNING: Updating existing component"
+            self.__state[component_name] = component.getInfo()
 
-    def remove_component(self, component):
-        component_name = component.getName()
+    def update(self, component_name, key, value):
+        if component_name not in self.__state:
+            print "ERROR: Updating component that is not present in the current state"
+        else:
+            if key == "location":
+                self.__state[component_name][key]["x"] = value[0]
+                self.__state[component_name][key]["y"] = value[1]
+            else:
+                self.__state[component_name][key] = value
+
+    def get(self, component_name, **optional_parameters):
+        if component_name not in self.__state:
+            print "ERROR: Component not present in the State object"
+            return
+        else:
+            if "key" in optional_parameters:
+                if "location" in optional_parameters["key"]:
+                    return (self.__state[component_name]["location"]["x"], self.__state[component_name]["location"]["y"])
+                else:
+                    return self.__state[component_name][optional_parameters["key"]]
+            else:
+                return self.__state[component_name]
+
+    def exist(self, component_name):
+        return component_name in self.__state
+
+    def delete(self, component_name):
         if component_name in self.__state:
             del self.__state[component_name]
         else:
-            print "ERROR: Trying to remove non-existing component"
+            # logging.error("Trying to remove non-existing component")
+            print "ERROR: Component not present in the State object"
 
     def getCurrentState(self):
         return self.__state
 
-    def updateComponentValue(self, component, key, value):
-        self.__state[component.getName()][key] = value
-        return self.__state
+    def type(self, component_name):
+        return self.__state[component_name]["type"]
 
-    def updateComponentLocation(self, component, location):
-        self.__state[component.getName()]["location"]["x"] = location["x"]
-        self.__state[component.getName()]["location"]["y"] = location["y"]
-        return self.__state
+class Map:
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.graph = GridWithWeights(width, height)
+        self.add_template('TEMPLATE_1')
+
+    def add_template(self, design_type):
+        if design_type == 'TEMPLATE_1':
+            # Adding walls
+            for x in range(self.width):
+                for y in range(self.height):
+                    if ((x * y) + ((x + 1) * y) + (x * (y + 1)) + ((x + 1) * (y + 1))) % 3:
+                        self.graph.walls.append((x, y))
+
+            # Adding default weights
+            passable_nodes = []
+            for x in range(self.width):
+                for y in range(self.height):
+                    if (x, y) not in self.graph.walls:
+                        passable_nodes.append((x, y))
+            self.graph.default_weights = {location: 0 for location in passable_nodes}
+
+            # TODO Adding distance weights
+            # Diagonal movement costs 14 units and orthogonal movement costs 10 units
+            # diag_block_dist = abs(pow(1, 1) - pow(0, 1)) + abs(pow(0, 1) - pow(1, 1))
+            # ortho_block_dist = abs(pow(1, 1) - pow(0, 1)) + abs(pow(0, 1) - pow(0, 1))
+            # self.graph.dist_weights = {diag_block_dist: 14, ortho_block_dist: 10}
+
+            # TODO Adding fuel weights
+            # diag_fuel_cost = diag_block_dist * FUEL_COST_PER_STEP
+            # ortho_fuel_cost = diag_block_dist * FUEL_COST_PER_STEP
+            # self.graph.dist_weights = {diag_fuel_cost: 7, ortho_fuel_cost: 5}
+
 
 """ This python class, dumpster will provide both definition of fields and methods
 for creating dumpster and maintaining the state of the dumpsters
 """
 
-class dumpster:
-    __info = {"name":None, "level":None, "location":{"x":None, "y":None}}
-    __meta = {"dumpsterCapacity":5000,"trashLevel":0}
-    ThresholdLevel = 8
-
-    def __init__(self, name, location, capacity, level):
+class Dumpster:
+    __info = {"location": {"x": None, "y": None}, "type": component_type.Dumpster}
+    ThresholdLevel = 5
+    def __init__(self, name, location, trash_capacity, trash_level):
         self.__info["name"] = name
         self.__info["location"]["x"] = location["x"]
         self.__info["location"]["y"] = location["y"]
-        self.__info["level"] = level
-        self.__meta["dumpsterCapacity"] = capacity
-        self.__meta["trashLevel"] = level/10.0 * capacity
+        self.__info["trash_level"] = trash_level
+        self.__info["trash_capacity"] = trash_capacity
 
-    # def updateTrashLevel(self, value):
-    #     self.__info["value"] = value
-    #     self.__meta["trashLevel"] = value/100.0 * self.__meta["dumpsterCapacity"]
+    def getTrashLevel(self):
+        return self.__info["trash_level"]
+
+    def getTrashCollected(self):
+        return self.__info["trash_level"]/10.0 * self.__info["trash_capacity"]
 
     def getLocation(self):
         return (self.__info["location"]["x"], self.__info["location"]["y"])
@@ -102,39 +161,39 @@ class dumpster:
     def getName(self):
         return self.__info["name"]
 
-    def getTrashLevel(self):
-        return self.__info["level"]
-
     def getInfo(self):
         return self.__info
 
 """ Class truck defines methods to create new truck, get location, get status, etc.
 """
 
-class truck:
+class Truck:
     # Truck dictionary to store the truck information
-    __info = {"name":None, "status":None, "location":{"x":None, "y":None}}
-    __meta = {"fuelCapacity":150, "fuelRemaining":0, "trashCapacity":30, "trashCollected":0}
-    def __init__(self, name, location, status, fuelCapacity, fuelFilled):
+    __info = {"location": {"x": None, "y": None}, "type": component_type.Truck}
+
+    def __init__(self, name, location, fuel_capacity, trash_capacity, fuel_level, trash_level):
         self.__info["name"] = name
         self.__info["location"]["x"] = location["x"]
         self.__info["location"]["y"] = location["y"]
-        self.__info["status"] = status
-        self.__meta["fuelCapacity"] = fuelCapacity
+        self.__info["trash_level"] = trash_level
+        self.__info["trash_capacity"] = trash_capacity
+        self.__info["fuel_level"] = fuel_level
+        self.__info["fuel_capacity"] = fuel_capacity
 
-        if not fuelFilled:
-            assert fuelFilled, "Forgot to add fuelCapacity"
-        else:
-            self.__meta["fuelRemaining"] = fuelCapacity - fuelFilled
+    def getFuelLevel(self):
+        return self.__info["fuel_level"]
 
-    def getFuelStatus(self):
-        return (self.__meta["fuelCapacity"] - self.__meta["fuelRemaining"])
+    def getFuelConsumed(self):
+        return self.__info["fuel_level"]/10.0 * self.__info["fuel_capacity"]
+
+    def getTrashLevel(self):
+        return self.__info["trash_level"]
+
+    def getTrashCollected(self):
+        return self.__info["trash_level"]/10.0 * self.__info["trash_capacity"]
 
     def getLocation(self):
         return (self.__info["location"]["x"], self.__info["location"]["y"])
-
-    def getStatus(self):
-        return self.__info["status"]
 
     def getName(self):
         return self.__info["name"]
