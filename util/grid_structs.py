@@ -11,7 +11,7 @@ FUEL_COST_PER_BLOCK = 1
 # Utility functions for dealing with square grids
 
 def draw_tile(graph, id, style, width):
-  r = "."
+  r = "-"
   if 'number' in style and id in style['number']: r = "%d" %(style['number'][id])
   if 'point_to' in style and style['point_to'].get(id, None) is not None:
     (x1, y1) = id
