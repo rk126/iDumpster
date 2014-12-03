@@ -14,18 +14,30 @@ import pika.exceptions
 import signal
 import sys
 import os
+import logging
+import threading
 
-import util.component
+# Components in the system
 from util.component import Map
 from util.component import Truck
 from util.component import Dumpster
 from util.component import State
 
-from util.component import as_enum
+# Enumeration class types
+from util.component import TruckState
 from util.component import component_type
+
+# Object hook for decoding enumeration class types
+from util.component import as_enum
+from util.component import EnumEncoder
+
 from util.grid_structs import GridWithWeights
+
+from util.grid_structs import FUEL_COST_PER_BLOCK
+
+# A * search algorithm
 from a_star.path_finder import A_Star_Search
-import logging
+
 
 class iDumpsterServerChannelHelper:
   """
@@ -57,6 +69,62 @@ class iDumpsterServerChannelHelper:
     """
     # Attempt to gracefully stop pika's event loop whenever a SIGINT is encountered
     self.__channel.stop_consuming()
+
+def manhattan_distance(start_loc, end_loc):
+  """
+  Calculate Manhattan distance
+
+  """
+  (x1, y1) = start_loc
+  (x2, y2) = end_loc
+  return abs(pow(x1, 1) - pow(x2, 1)) + abs(pow(y1, 1) - pow(y2, 1))
+
+def manage_overflowing_dumpster (overflowing_dumpster, channel):
+  """
+  Worker thread to manage overflowing dumpster
+
+  """
+  logging.info(overflowing_dumpster.getName() + "'s Thread")
+  for component_name in environment_current_state.getCurrentState():
+      if environment_current_state.type(component_name) == component_type.Truck:
+          if environment_current_state.get(component_name, key="status") == TruckState.IDLE:
+              # Calculate the trash capacity - trash collected by truck so far and
+              # see if that is greater current dumpster's trash
+              current_truck_trash_level = environment_current_state.get(component_name, key="trash_level")
+              current_truck_trash_capacity = environment_current_state.get(component_name, key="trash_capacity")
+              current_truck_trash_collected = current_truck_trash_level / 10.0 * current_truck_trash_capacity
+              overflowing_dumpster_trash_content = overflowing_dumpster.getTrashCollected()
+              if current_truck_trash_collected + overflowing_dumpster_trash_content < current_truck_trash_capacity:
+                  # Calculate the fuel estimate for the round trip and see if the truck
+                  # has that much amount of fuel left to go for a drive
+                  current_truck_loc = environment_current_state.get(component_name, key="location")
+                  current_truck_fuel_level = environment_current_state.get(component_name, key="fuel_level")
+                  current_truck_fuel_capacity = environment_current_state.get(component_name, key="fuel_capacity")
+                  current_truck_fuel_left = current_truck_fuel_level/10.0 * current_truck_fuel_capacity
+                  overflowing_dumpster_loc = overflowing_dumpster.getLocation()
+                  estimated_distance = manhattan_distance(current_truck_loc, overflowing_dumpster_loc)
+                  # Assuming unit fuel consumed for unit distance
+                  # Also for round trip time, we consider 2 times the estimated distance
+                  estimated_fuel_consumed = FUEL_COST_PER_BLOCK * (estimated_distance * 2)
+                  if current_truck_fuel_left > estimated_fuel_consumed:
+                      # Create truck object
+                      logging.info("Creating " + component_name + " object to parse the information to the A * search")
+                      current_truck_selected = Truck(name=component_name, location={"x":current_truck_loc[0], "y": current_truck_loc[1]}, fuel_capacity=current_truck_fuel_capacity, fuel_level=current_truck_fuel_level, trash_capacity=current_truck_trash_capacity, trash_level=current_truck_trash_level, status=TruckState.BUSY)
+                      with state_variable_lock:
+                          environment_current_state.put(current_truck_selected)
+                      # Use A * search to get the route
+                      logging.info("Calculating " + component_name + " to " + overflowing_dumpster.getName() + " path")
+                      a_star_instance = A_Star_Search(environment_map.graph, current_truck_selected, overflowing_dumpster)
+                      a_star_path = a_star_instance.get_a_star_path()
+                      came_from = a_star_instance.get_came_from()
+                      path_information = {"status": TruckState.BUSY, "a_star_path": a_star_path}
+                      print path_information
+                      data = json.dumps(path_information, indent = 4, sort_keys=True,cls=EnumEncoder)
+                      # Send the route the desired routing key
+                      channel.basic_publish(exchange = "iDumpster_exchange", routing_key=component_name, body=data)
+                      # print data
+                      logging.info("Calculated Path using A * search sent to the truck under consideration")
+
 
 def get_log_level(verbosity):
   """
@@ -138,49 +206,43 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
     # Check that the message appears to be well formed
 
     if "type" not in status_msg:
-        logging.warning("Ignoring message: Unknown message type")
+        logging.warning("Ignoring message: Message type not found")
 
     elif status_msg["type"] == component_type.Dumpster:
+        logging.info(delivery_info.routing_key + "'s Message Received")
         if "capacity" not in status_msg:
-            logging.warning("Ignoring message: Missing 'capacity' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'capacity' field")
         elif "location" not in status_msg:
-            logging.warning("Ignoring message: Missing 'location' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'location' field")
         elif "level" not in status_msg:
-            logging.warning("Ignoring message: Missing 'level' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'level' field")
         else:
-            logging.info("Dumpster data received")
             current_dumpster = Dumpster(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["capacity"], trash_level=status_msg["level"])
             logging.info("Storing dumpster data in the state variable")
             environment_current_state.put(current_dumpster)
 
             if current_dumpster.getTrashLevel() > current_dumpster.ThresholdLevel:
-                # Call A* search functions to start finding optimized, currently assuming there is a truck in the state variable.
-                # In actual program we will pick up a truck that is nearest and has good amount of fuel and is less filled with trash
-                # In actual program we will pick up this info from the state information
-                current_truck = Truck(name="truck1", location={"x": 17,"y": 19}, fuel_level=9, fuel_capacity=150, trash_level=1, trash_capacity=400)
-                global a_star_running
-                if not a_star_running:
-                    a_star_instance = A_Star_Search(environment_map.graph, current_truck, current_dumpster)
-                    logging.info("Cost at the beginning: " + str(a_star_instance.get_cost_so_far(current_truck.getLocation())))
-                    logging.info("Cost at the end: " + str(a_star_instance.get_cost_so_far(current_dumpster.getLocation())))
-                    a_star_running = 1
+                threading.Thread(target=manage_overflowing_dumpster, args=(current_dumpster, channel)).start()
 
     elif status_msg["type"] == component_type.Truck:
-        logger.info("Truck Message Received")
+        logging.info(delivery_info.routing_key + "'s Message Received")
         if "trash_capacity" not in status_msg:
-            logging.warning("Ignoring Truck message: Missing 'trash_capacity' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'trash_capacity' field")
         elif "location" not in status_msg:
-            logging.warning("Ignoring Truck message: Missing 'location' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'location' field")
         elif "trash_level" not in status_msg:
-            logging.warning("Ignoring Truck message: Missing 'trash_level' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'trash_level' field")
         elif "fuel_capacity" not in status_msg:
-            logging.warning("Ignoring Truck message: Missing 'fuel_capacity' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'fuel_capacity' field")
         elif "fuel_level" not in status_msg:
-            logging.warning("Ignoring Truck message: Missing 'fuel_level' field")
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'fuel_level' field")
+        elif "status" not in status_msg:
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'status' field")
         else:
-            current_truck = Truck(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["trash_capacity"], trash_level=status_msg["trash_level"], fuel_level=status_msg["fuel_level"], fuel_capacity=status_msg["fuel_capacity"])
+            current_truck = Truck(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["trash_capacity"], trash_level=status_msg["trash_level"], fuel_level=status_msg["fuel_level"], fuel_capacity=status_msg["fuel_capacity"], status=status_msg["status"])
             logging.info("Storing truck data in the state variable")
             environment_current_state.put(current_truck)
+            all_trucks_state[delivery_info.routing_key] = status_msg["status"]
     else:
         logging.warning("Ignoring message: Unknown type message received")
 
@@ -232,18 +294,22 @@ try:
   # Get both m and n dimensions of the map
   (m, n) = get_dimensions(map_size)
 
+  # Truck State (IDLE or BUSY)
+
+  all_trucks_state = {}
+
   # Bryse Flowers verbosity level code
 
   logging_format = '%(asctime)s ' + '%(msecs)d' + ' -- ' + '%(funcName)s(%(lineno)d)' + ' -- ' + ' %(levelname)s ' + ' -- ' + '%(message)s'
   logging_date_format = '%I:%M:%S %p'
   logging.basicConfig(level=log_level, format=logging_format, datefmt=logging_date_format)
 
-  logging.info("I am here")
-
   environment_map = Map(m, n)
 
   message_broker = None
   channel = None
+
+  state_variable_lock = threading.Lock()
 
   try:
     # Connect to the message broker using the given broker address (host)
@@ -256,10 +322,10 @@ try:
 
     # Setup the channel and exchange
     channel = message_broker.channel()
-    logging.info("Channel created, now declaring exchange 'dumpster_data' of type 'direct'")
+    logging.info("Channel created, now declaring exchange 'iDumpster_exchange' of type 'direct'")
 
     # Exchange declaration, NOTE that this exchange is not a durable one
-    channel.exchange_declare(exchange='dumpster_data', type='direct')
+    channel.exchange_declare(exchange='iDumpster_exchange', type='direct')
     logging.info("Exchange declared successfully, now declaring an exclusive queue")
 
 
@@ -285,7 +351,7 @@ try:
 
     # Bind your queue to the message exchange, and register your new message event handler
     for topic in topics:
-      channel.queue_bind(exchange='dumpster_data', queue=queue_name, routing_key=topic)
+      channel.queue_bind(exchange='iDumpster_exchange', queue=queue_name, routing_key=topic)
     logging.info("Binding of exchange with the declared queue successful, now start pika's event loop by calling channel.basic_consume")
 
     # Start pika's event loop

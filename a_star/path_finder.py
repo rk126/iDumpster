@@ -16,7 +16,7 @@ from structs import draw_grid
 import logging
 
 TEST_PROGRAM_ACTIVE = 1
-FUEL_COST_PER_STEP = 2
+FUEL_COST_PER_BLOCK = 1
 
 class A_Star_Search:
   __came_from = {}
@@ -35,6 +35,7 @@ class A_Star_Search:
       self.__came_from, self.__cost_so_far = self.a_star_search(graph, start, goal)
       self.__a_star_path = self.reconstruct_path(self.__came_from, start, goal)
     if TEST_PROGRAM_ACTIVE:
+      print "Map grid with the path traced from Truck (T) to Dumpster (D) is shown as '@'"
       draw_grid(graph, width=1, path=self.__a_star_path, start=start, goal=goal)
 
   def reconstruct_path(self, came_from, start, goal):
@@ -52,7 +53,7 @@ class A_Star_Search:
     return estimated_distance
 
   def fuel_estimate(self, a, b):
-    return self.distance_estimate(a, b) * FUEL_COST_PER_STEP
+    return self.distance_estimate(a, b) * FUEL_COST_PER_BLOCK
 
   def a_star_search(self, graph, start, goal):
     frontier = PriorityQueue()
@@ -87,3 +88,6 @@ class A_Star_Search:
     reversed_path = self.__a_star_path
     reversed_path.reverse()
     return reversed_path
+
+  def get_came_from(self):
+    return self.__came_from

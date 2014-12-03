@@ -7,6 +7,7 @@ The square grid, with weights and draw utility functions are direct implementati
 """
 
 import heapq
+from enum import Enum
 
 # Utility functions for dealing with square grids
 
@@ -44,3 +45,5 @@ class PriorityQueue:
 
   def get(self):
     return heapq.heappop(self.elements)[1]
+
+

@@ -23,6 +23,7 @@
 
 import json
 # import logging
+from copy import deepcopy
 from enum import Enum
 from grid_structs import GridWithWeights
 
@@ -46,6 +47,10 @@ class component_type(Enum):
     Dumpster = 1
     Truck = 2
 
+class TruckState(Enum):
+    IDLE = 0
+    BUSY = 1
+
 class State:
     def __init__(self):
         self.__state = {}
@@ -58,7 +63,7 @@ class State:
             self.__state[component_name] = component.getInfo()
         # Updating existing component entirely
         else:
-            print "WARNING: Updating existing component"
+            # print "WARNING: Updating existing component"
             self.__state[component_name] = component.getInfo()
 
     def update(self, component_name, key, value):
@@ -95,7 +100,7 @@ class State:
             print "ERROR: Component not present in the State object"
 
     def getCurrentState(self):
-        return self.__state
+        return deepcopy(self.__state)
 
     def type(self, component_name):
         return self.__state[component_name]["type"]
@@ -162,7 +167,7 @@ class Dumpster:
         return self.__info["name"]
 
     def getInfo(self):
-        return self.__info
+        return deepcopy(self.__info)
 
 """ Class truck defines methods to create new truck, get location, get status, etc.
 """
@@ -171,7 +176,7 @@ class Truck:
     # Truck dictionary to store the truck information
     __info = {"location": {"x": None, "y": None}, "type": component_type.Truck}
 
-    def __init__(self, name, location, fuel_capacity, trash_capacity, fuel_level, trash_level):
+    def __init__(self, name, location, fuel_capacity, trash_capacity, fuel_level, trash_level, status):
         self.__info["name"] = name
         self.__info["location"]["x"] = location["x"]
         self.__info["location"]["y"] = location["y"]
@@ -179,6 +184,7 @@ class Truck:
         self.__info["trash_capacity"] = trash_capacity
         self.__info["fuel_level"] = fuel_level
         self.__info["fuel_capacity"] = fuel_capacity
+        self.__info["status"] = status
 
     def getFuelLevel(self):
         return self.__info["fuel_level"]
@@ -199,4 +205,7 @@ class Truck:
         return self.__info["name"]
 
     def getInfo(self):
-        return self.__info
+        return deepcopy(self.__info)
+
+    def getStatus(self):
+        return self.__info["status"]

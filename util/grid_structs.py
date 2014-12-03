@@ -6,7 +6,7 @@ The square grid, with weights and draw utility functions are direct implementati
     www.redblobgames.com/pathfinding/a-star/implementation.html
 """
 
-FUEL_COST_PER_STEP = 2
+FUEL_COST_PER_BLOCK = 1
 
 # Utility functions for dealing with square grids
 
@@ -81,6 +81,6 @@ class GridWithWeights(SquareGrid):
     (x1, y1) = a
     (x2, y2) = b
     distance = abs(pow(x1, 1) - pow(x2, 1)) + abs(pow(y1, 1) - pow(y2, 1))
-    fuel = distance * FUEL_COST_PER_STEP
+    fuel = distance * FUEL_COST_PER_BLOCK
     return self.fuel_weights.get(fuel, 1)
 
