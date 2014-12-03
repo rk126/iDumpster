@@ -11,14 +11,13 @@ import signal
 import sys
 import time
 import json
-from random import randint
-from random import uniform
+from VCNL4000 import VCNL4000
+
 from util.component import component_type
 from util.component import EnumEncoder
 
 # Global variable that controls running the app
 publish_levels = True
-prev_sensor_value = 0
 
 def stop_dumpster_service(signal, frame):
     """
@@ -33,20 +32,29 @@ def stop_dumpster_service(signal, frame):
     global publish_levels
     publish_levels = False
 
+# Initialise the VNCL4000 sensor
+vcnl = VCNL4000(0x13)
+result = 0
 def read_Sensor():
     """
     Returns a value with the dumpster level
 
     :return: (val) The value returned will represent the level in the dumpster
     """
-    global prev_sensor_value
-    result = prev_sensor_value + uniform(0, 0.75)
-    if result <= 10:
-      prev_sensor_value = result
-      return result
-    else:
-      print "Overflowing Dumpster!"
-      return 10
+    global result
+    try:
+        x = vcnl.read_proximity()
+        if x <= 2280:
+                result = 0
+        elif x >= 2290 and x <= 2399:
+                result = 0.33
+        elif x >= 2400 and x <= 2550:
+                result = 0.66
+        elif x >= 2950:
+                result = 1
+    except Exception:
+        return result #if I2C doesn't respond, result value doesn't change
+    return result
 
 def get_credentials(cmd_cred):
     '''Translate a <username>:<password> string to a Pika credential'''
@@ -107,7 +115,7 @@ try:
     credentials = get_credentials(args.credentials)
     topic = args.key
     capacity = args.capacity
-    location = [str(args.locx), str(args.locy)]
+    location_dict = {"x": args.locx, "y": args.locy}
 
     # Ensure that the user specified the required arguments
     if args.locx < 0 or args.locy < 0:
@@ -141,29 +149,18 @@ try:
         channel = message_broker.channel()
         channel.exchange_declare(exchange='iDumpster_exchange',type='direct')
 
-        # location = ','.join(location) #make location a string
-        location_dict = {"x": int(location[0]), "y": int(location[1])}
         # Create a data structure to hold the dumpster data
         dumpster_data = {'capacity': capacity, 'level': None, 'location': location_dict, 'type': component_type.Dumpster}
-        # Create a list of levels so level can be averaged over past 5 values
-        level = []
-        #grab first 5 values for level data
-        for i in range(0,5):
-            level.insert(0,read_Sensor())
-            time.sleep(2)
 
         # Loop until the application is asked to quit
         while(publish_levels):
-            # Read level
-            level.insert(0,read_Sensor()) #inserts new reading at start of list
-            level.pop() #removes last item in list
 
-            #compute average of previous 5 values
-            x = float(sum(level))
-            y = float(len(level))
-            dumpster_data['level'] = x/y
+            #read sensor level
+            level = read_Sensor()
+            dumpster_data['level'] = level
+            time.sleep(2)
 
-            #   Publish the message (utilization_msg) in JSON format to the
+            #   Publish the message in JSON format to the
             #   broker under the user specified topic.
             #   cls=EnumEncoder from stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
             data = json.dumps(dumpster_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
