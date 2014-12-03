@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-This file contains iDumpster.py which will read the sensor values over I2C and
+This file contains truck_program.py which will send their status and receive paths which thereby they will follow to collect overflowing dumpsters
 send them via RabbitMQ to the central server
 """
 import argparse
@@ -11,15 +11,58 @@ import signal
 import sys
 import time
 import json
-from VCNL4000 import VCNL4000
+import threading
+
+from random import randint
+from random import uniform
 
 from util.component import component_type
+from util.component import TruckState
+
+# Enumeration Encoder class inherits JSONEncoder to support enumerated types encoding
 from util.component import EnumEncoder
+from util.component import as_enum
+
 
 # Global variable that controls running the app
 publish_levels = True
+prev_sensor_value = 0
 
-def stop_dumpster_service(signal, frame):
+def receive_path_info(channel, delivery_info, msg_properties, msg):
+    # if msg == None:
+    #     return
+    try:
+        recv_path_msg = json.loads(msg, object_hook=as_enum)
+
+        if "status" not in recv_path_msg:
+            print "Warning: Reply Message 'status' not found, Ignoring message"
+        elif "a_star_path" not in recv_path_msg:
+            print "Warning: Reply Message 'a_star_path' not found, Ignoring message"
+        else:
+            truck_data["status"] = recv_path_msg["status"]
+            print recv_path_msg["a_star_path"]
+
+    except ValueError, ve:
+        print "Warning: Discarding message: received message couldn't be parsed" + str(ve.message)
+    except NameError, ne:
+        print "Warning: Name error has occurred " + str(ne.message)
+    except Exception, eee:
+        print "Error: Unknown error has occurred " + str(eee.message)
+
+def subscribing_path_info(truck_data, channel, topic):
+
+    # Create a queue
+
+    result = channel.queue_declare(exclusive=True)
+    queue_name = result.method.queue
+
+    with channel_lock:
+        channel.queue_bind(exchange='iDumpster_exchange', queue=queue_name, routing_key=topic)
+        channel.basic_consume(receive_path_info, queue=queue_name, no_ack=True)
+
+        channel.start_consuming()
+
+def stop_truck_service(signal, frame):
     """
     A signal handler, that will cause the main execution loop to stop
 
@@ -32,29 +75,23 @@ def stop_dumpster_service(signal, frame):
     global publish_levels
     publish_levels = False
 
-# Initialise the VNCL4000 sensor
-vcnl = VCNL4000(0x13)
-result = 0
-def read_Sensor():
+def get_truck_status():
     """
-    Returns a value with the dumpster level
+    Returns a dictionary with the fuel level, location, trash_level
 
-    :return: (val) The value returned will represent the level in the dumpster
+    :return: (dict) The value returned will represent the level in the dumpster
     """
-    global result
-    try:
-        x = vcnl.read_proximity()
-        if x <= 2280:
-                result = 0
-        elif x >= 2290 and x <= 2399:
-                result = 0.33
-        elif x >= 2400 and x <= 2550:
-                result = 0.66
-        elif x >= 2950:
-                result = 1
-    except Exception:
-        return result #if I2C doesn't respond, result value doesn't change
-    return result
+    # Will be triggered when we press keyboard keys,
+    # w for going UP
+    # s for going DOWN
+    # a for going LEFT
+    # d for going RIGHT
+    # q for going diagonally UP-LEFT
+    # e for going diagonally UP-RIGHT
+    # z for going diagonally DOWN-LEFT
+    # c for going diagonally DOWN-RIGHT
+    # <space> to collect trash once in the dumpster block
+    return dict()
 
 def get_credentials(cmd_cred):
     '''Translate a <username>:<password> string to a Pika credential'''
@@ -84,7 +121,7 @@ try:
     # Add All Desired Arguments to the Parser
     parser.add_argument("-b", "--broker_address",
             help="This is the ip address or domain of the message broker",
-            metavar="message broker", default="omaha.local", type=str,
+            metavar="message broker", default="localhost", type=str,
             required=True)
     parser.add_argument("-p", "--path",
             help="Path to Virtual Host to connect to on the message broker.",
@@ -94,10 +131,19 @@ try:
             metavar="login:password", default=None)
     parser.add_argument("-k", "--key",
             help="The routing key for publishing messages to the message broker",
-            metavar="routing key", default="iDumpster", type=str, required=True)
-    parser.add_argument("-v", "--capacity",
-            help="Volume that this trash can will hold before becoming full",
-            metavar="volume", default=0, type=int, required=True)
+            metavar="routing key", default="iTruck", type=str, required=True)
+    parser.add_argument("-tc", "--trash_capacity",
+            help="Volume of trash that this truck will hold before becoming full",
+            metavar="trash volume", default=0, type=int, required=True)
+    parser.add_argument("-fc", "--fuel_capacity",
+            help="Maximum Volume of fuel that this truck can hold",
+            metavar="fuel volume", default=0, type=int, required=True)
+    parser.add_argument("-ff", "--fuel_filled",
+            help="Volume of fuel that is filled initially in the truck",
+            metavar="fuel filled", default=0, type=int, required=True)
+    parser.add_argument("-tf", "--trash_filled",
+            help="Volume of trash that is filled initially in the truck",
+            metavar="trash filled", default=0, type=int)
     parser.add_argument("-x", "--locx",
             help="Fake location of the dumpster on x axis", metavar="x",
             default="0", type=int, required=True)
@@ -114,26 +160,39 @@ try:
     # This will throw a runtime exception with improper formatted cli
     credentials = get_credentials(args.credentials)
     topic = args.key
-    capacity = args.capacity
-    location_dict = {"x": args.locx, "y": args.locy}
+    trash_capacity = args.trash_capacity
+    fuel_capacity = args.fuel_capacity
+    fuel_filled = args.fuel_filled
+    trash_filled = args.trash_filled
+    location = [str(args.locx), str(args.locy)]
 
     # Ensure that the user specified the required arguments
     if args.locx < 0 or args.locy < 0:
-        print "You must specify a valid x,y coordinate for the dumpster"
+        print "You must specify a valid x,y coordinate for the truck"
         sys.exit()
 
-    # Ensure there is dumpster capacity
-    if not capacity > 0:
-        print "The dumpster must have > 0 volume"
+    # Ensure there is trash capacity
+    if not trash_capacity > 0:
+        print "The Truck's Trash capacity must have > 0 volume"
         sys.exit()
+
+    # Ensure there is fuel capacity
+    if not fuel_capacity > 0:
+        print "The Truck's Fuel capacity mush have > 0 volume"
+        sys.exit(-1)
+
+    # Ensure there is fuel filled
+    if not fuel_filled > 0:
+        print "Please fill up some fuel so that the truck can start"
+        sys.exit(-1)
 
     # Setup signal handlers to shutdown this app when SIGINT or SIGTERM is
     # sent to this app
     signal_num = signal.SIGINT
     try:
-        signal.signal(signal_num, stop_dumpster_service)
+        signal.signal(signal_num, stop_truck_service)
         signal_num = signal.SIGTERM
-        signal.signal(signal_num, stop_dumpster_service)
+        signal.signal(signal_num, stop_truck_service)
 
     except ValueError, ve:
         print "Warning: Graceful shutdown may not be possible: Unsupported " \
@@ -149,22 +208,25 @@ try:
         channel = message_broker.channel()
         channel.exchange_declare(exchange='iDumpster_exchange',type='direct')
 
+        channel_lock = threading.Lock()
+
+        # location = ','.join(location) #make location a string
+        location_dict = {"x": int(location[0]), "y": int(location[1])}
         # Create a data structure to hold the dumpster data
-        dumpster_data = {'capacity': capacity, 'level': None, 'location': location_dict, 'type': component_type.Dumpster}
+        truck_data = {'status': TruckState.IDLE, 'trash_capacity': trash_capacity, 'fuel_capacity': fuel_capacity, 'fuel_level': None, "trash_level": None, 'location': location_dict, 'type': component_type.Truck}
+        truck_data["trash_level"] = trash_filled/float(trash_capacity) * 10.0
+        truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 10.0
+
+
+        threading.Thread(target=subscribing_path_info, args=(truck_data, channel, topic)).start()
 
         # Loop until the application is asked to quit
+
         while(publish_levels):
-
-            #read sensor level
-            level = read_Sensor()
-            dumpster_data['level'] = level
-            time.sleep(2)
-
-            #   Publish the message in JSON format to the
+            #   Publish the message (truck_msg) in JSON format to the
             #   broker under the user specified topic.
             #   cls=EnumEncoder from stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
-            data = json.dumps(dumpster_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
-
+            data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
             channel.basic_publish(exchange = 'iDumpster_exchange', routing_key = topic,
                                   body = data)
             print "Sent: ", data
