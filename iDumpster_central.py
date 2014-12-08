@@ -86,7 +86,7 @@ def getJSONTrucks ():
       Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level'])])
       JSONTrucks.append(Truck_dict)
 
-  return JSONTrucks
+  return json.dumps(JSONTrucks)
 
 def getJSONDumpsters ():
   """
@@ -100,7 +100,7 @@ def getJSONDumpsters ():
       Dumpster_dict = dict([('name', component), ('location', current_state[component]['location']), ('trash_level', current_state[component]['trash_level'])])
       JSONDumpsters.append(Dumpster_dict)
 
-  return JSONDumpsters
+  return json.dumps(JSONDumpsters)
 
 def getJSONMap ():
   """
