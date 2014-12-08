@@ -46,11 +46,11 @@ var TruckTable = React.createClass({
         <table className="table table-striped">
           <thead>
             <tr>
-              <th className="col-md-3">Truck Name</th>
-              <th className="col-md-3">Location</th>
-              <th className="col-md-3">Status</th>
-              <th className="col-md-3">Fuel Level</th>
-              <th className="col-md-3">Trash Level</th>
+              <th className="col-md-1">Truck Name</th>
+              <th className="col-md-1">Location</th>
+              <th className="col-md-1">Status</th>
+              <th className="col-md-1">Fuel Level</th>
+              <th className="col-md-1">Trash Level</th>
             </tr>
           </thead>
           <tbody>
