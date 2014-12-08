@@ -163,21 +163,33 @@ def start(dumpster_cb=demo_dumpster_data,
           truck_cb=demo_truck_data,
           map_cb=demo_map_data):
   global app
+  global _dumpster_cb
+  global _truck_cb
+  global _map_cb
+
+  _dumpster_cb = dumpster_cb
+  _truck_cb = truck_cb
+  _map_cb = map_cb
+
+  print("Starting webserver with callbacks as")
+  print("-------------------------------------")
+  print("Dumpster: " + str(_dumpster_cb))
+  print("Truck: " + str(_truck_cb))
+  print("Map: " + str(_map_cb))
+  print("-------------------------------------")
+
   app.run(host="0.0.0.0", port=80, debug=True)
 
 @app.route('/dumpsters.json')
 def get_dumpster_data():
-  global _dumpster_cb
   return _dumpster_cb()
 
 @app.route('/trucks.json')
 def get_truck_data():
-  global _truck_cb
   return _truck_cb()
 
 @app.route('/map.txt')
 def get_map_data():
-  global _map_cb
   return _map_cb()
 
 @app.route('/')
