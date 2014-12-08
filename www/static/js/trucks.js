@@ -6,8 +6,10 @@ var Truck = React.createClass({
     return (
       <tr>
         <td>{this.props.name}</td>
-        <td>{this.props.location}</td>
+        <td>{this.props.location.x}, {this.props.location.y}</td>
         <td>{this.props.status}</td>
+        <td>{this.props.fuel}</td>
+        <td>{this.props.trash}</td>
       </tr>
     );
   }
@@ -36,7 +38,7 @@ var TruckTable = React.createClass({
   render: function() {
     var truckNodes = this.state.data.map(function(truck, index) {
       return (
-        <Truck name={truck.name} location={truck.location} status={truck.status} key={index} />
+        <Truck name={truck.name} location={truck.location} status={truck.status} fuel={truck.fuel_level} trash={truck.trash_level} key={index} />
       );
     });
     return (
@@ -47,6 +49,8 @@ var TruckTable = React.createClass({
               <th className="col-md-3">Truck Name</th>
               <th className="col-md-3">Location</th>
               <th className="col-md-3">Status</th>
+              <th className="col-md-3">Fuel Level</th>
+              <th className="col-md-3">Trash Level</th>
             </tr>
           </thead>
           <tbody>

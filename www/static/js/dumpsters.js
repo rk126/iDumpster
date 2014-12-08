@@ -6,7 +6,7 @@ var Dumpster = React.createClass({
     return (
       <tr>
         <td>{this.props.name}</td>
-        <td>{this.props.location}</td>
+        <td>{this.props.location.x}, {this.props.location.y}</td>
         <td>{this.props.value}</td>
       </tr>
     );
@@ -36,7 +36,7 @@ var DumpsterTable = React.createClass({
   render: function() {
     var dumpsterNodes = this.state.data.map(function(dumpster, index) {
       return (
-        <Dumpster name={dumpster.name} location={dumpster.location} value={dumpster.value} key={index} />
+        <Dumpster name={dumpster.name} location={dumpster.location} value={dumpster.trash_level} key={index} />
       );
     });
     return (
