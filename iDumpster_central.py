@@ -399,17 +399,14 @@ try:
 
     # Start pika's event loop
     logging.info("Pika's event loop started")
+    pika_thread = threading.Thread(target=channel.start_consuming)
+    pika_thread.start()
 
     # Start HTTP Server in a Seperate Thread
     logging.info("Going into beast mode with Flask Server and JS Goodness")
-    web = threading.Thread(target=web_server.start,
-                           args=(getJSONDumpsters,
-                                 getJSONTrucks)
-                          )
-    web.start()
+    web_server.start(dumpster_cb=getJSONDumpsters,
+                     truck_cb=getJSONTrucks)
 
-
-    channel.start_consuming()
 
   except pika.exceptions.ProbableAccessDeniedError, pade:
     logging.error("A Probable Access Denied Error occurred: " + str(pade.message))
@@ -437,6 +434,7 @@ try:
     logging.error("An unexpected exception occurred: " + str(eee.message))
 
   finally:
+    pika_thread.stop()
     # Attempt to gracefully shutdown the connection to the message broker
     # Closing the channel gracefully
     if channel is not None:
@@ -447,8 +445,6 @@ try:
     if message_broker is not None:
       message_broker.close()
       logging.info("Message broker closed successfully, Shutting down gracefully!")
-    logging.info("Killing master's web server")
-    web.stop()
     sys.exit()
 
 except NameError, ne:
