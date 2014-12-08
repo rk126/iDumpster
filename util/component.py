@@ -22,6 +22,7 @@
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 import json
+import ast
 # import logging
 from copy import deepcopy
 from enum import Enum
@@ -42,6 +43,42 @@ def as_enum(d):
         return getattr(globals()[name], member)
     else:
         return d
+
+class MapEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Map):
+            map_dict = dict()
+            for key in obj.__dict__.keys():
+                if isinstance(obj.__dict__[key], GridWithWeights):
+                    map_dict[key] = obj.__dict__[key].__dict__
+                else:
+                    map_dict[key] = obj.__dict__[key]
+            return {"__map__": str(map_dict)}
+        return json.JSONEncoder.default(self, obj)
+
+def as_map(d):
+    """ Object hook for loading json data of Map object.
+    Took help of http://stackoverflow.com/questions/988228/converting-a-string-to-dictionary 
+    Here we first re-convert our string type to dictionary and return a Map object with the 
+    data exactly matching with the received json map data.
+    """
+    if "__map__" in d:
+        map_data = ast.literal_eval(d["__map__"])
+        for key in map_data.keys():
+            if key == 'graph':
+                map_obj = Map(height=map_data[key]['height'], width=map_data[key]['width'], template=None)
+                map_obj.graph.height = map_data[key]['height']
+                map_obj.graph.width = map_data[key]['width']
+                map_obj.graph.default_weights = map_data[key]['default_weights']
+                map_obj.graph.fuel_weights = map_data[key]['fuel_weights']
+                map_obj.graph.dist_weights = map_data[key]['dist_weights']
+                map_obj.graph.walls = map_data[key]['walls']
+            else:
+                print "ERROR: Control shouldn't reach here"
+        return map_obj
+    else:
+        return d
+
 
 class component_type(Enum):
     Dumpster = 1
@@ -106,24 +143,22 @@ class State:
         return self.__state[component_name]["type"]
 
 class Map:
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
+    def __init__(self, width=None, height=None, template=None):
         self.graph = GridWithWeights(width, height)
-        self.add_template('TEMPLATE_1')
+        self.add_template(template)
 
     def add_template(self, design_type):
         if design_type == 'TEMPLATE_1':
             # Adding walls
-            for x in range(self.width):
-                for y in range(self.height):
+            for x in range(self.graph.width):
+                for y in range(self.graph.height):
                     if ((x * y) + ((x + 1) * y) + (x * (y + 1)) + ((x + 1) * (y + 1))) % 3:
                         self.graph.walls.append((x, y))
 
             # Adding default weights
             passable_nodes = []
-            for x in range(self.width):
-                for y in range(self.height):
+            for x in range(self.graph.width):
+                for y in range(self.graph.height):
                     if (x, y) not in self.graph.walls:
                         passable_nodes.append((x, y))
             self.graph.default_weights = {location: 0 for location in passable_nodes}

@@ -30,6 +30,8 @@ from util.component import component_type
 # Object hook for decoding enumeration class types
 from util.component import as_enum
 from util.component import EnumEncoder
+from util.component import as_map
+from util.component import MapEncoder
 
 from util.grid_structs import GridWithWeights
 
@@ -69,6 +71,42 @@ class iDumpsterServerChannelHelper:
     """
     # Attempt to gracefully stop pika's event loop whenever a SIGINT is encountered
     self.__channel.stop_consuming()
+
+def getJSONTrucks ():
+  """
+  Used by the web_server application to get the latest truck position and fuel updates
+  """
+  JSONTrucks = []
+  current_state = environment_current_state.getCurrentState()
+  all_component_names = current_state.keys()
+  for component in all_component_names:
+    if current_state[component]["type"] == component_type.Truck:
+      Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level'])])
+      JSONTrucks.append(Truck_dict)
+  
+  return JSONTrucks
+
+def getJSONDumpsters ():
+  """
+  Used by the web_server application to get the latest dumpster position, trash level
+  """
+  JSONDumpsters = []
+  current_state = environment_current_state.getCurrentState()
+  all_component_names = current_state.keys()
+  for component in all_component_names:
+    if current_state[component]["type"] == component_type.Dumpster:
+      Dumpster_dict = dict([('name', component), ('location', current_state[component]['location']), ('trash_level', current_state[component]['trash_level'])])
+      JSONDumpsters.append(Dumpster_dict)
+  
+  return JSONDumpsters
+
+def getJSONMap ():
+  """
+  Used by the web_server application to get the latest map information, for rendering it in the web page
+  """
+  json_map_data = json.dumps(environment_map, cls=MapEncoder)
+  return json_map_data
+
 
 def manhattan_distance(start_loc, end_loc):
   """
@@ -304,7 +342,7 @@ try:
   logging_date_format = '%I:%M:%S %p'
   logging.basicConfig(level=log_level, format=logging_format, datefmt=logging_date_format)
 
-  environment_map = Map(m, n)
+  environment_map = Map(width=m, height=n, template='TEMPLATE_1')
 
   message_broker = None
   channel = None
