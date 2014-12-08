@@ -40,6 +40,8 @@ from util.grid_structs import FUEL_COST_PER_BLOCK
 # A * search algorithm
 from a_star.path_finder import A_Star_Search
 
+# Web Server
+from www import web_server
 
 class iDumpsterServerChannelHelper:
   """
@@ -398,6 +400,15 @@ try:
     # Start pika's event loop
     logging.info("Pika's event loop started")
 
+    # Start HTTP Server in a Seperate Thread
+    logging.info("Going into beast mode with Flask Server and JS Goodness")
+    web = threading.Thread(target=web_server.start,
+                           args=(getJSONDumpsters,
+                                 getJSONTrucks)
+                          )
+    web.start()
+
+
     channel.start_consuming()
 
   except pika.exceptions.ProbableAccessDeniedError, pade:
@@ -436,6 +447,8 @@ try:
     if message_broker is not None:
       message_broker.close()
       logging.info("Message broker closed successfully, Shutting down gracefully!")
+    logging.info("Killing master's web server")
+    web.stop()
     sys.exit()
 
 except NameError, ne:
