@@ -25,6 +25,7 @@ from util.component import State
 
 # Enumeration class types
 from util.component import TruckState
+from util.component import DumpsterState
 from util.component import component_type
 
 # Object hook for decoding enumeration class types
@@ -119,12 +120,13 @@ def manhattan_distance(start_loc, end_loc):
   (x2, y2) = end_loc
   return abs(pow(x1, 1) - pow(x2, 1)) + abs(pow(y1, 1) - pow(y2, 1))
 
-def manage_overflowing_dumpster (overflowing_dumpster, channel):
+def manage_overflowing_dumpster (overflowing_dumpster):
   """
   Worker thread to manage overflowing dumpster
 
   """
   logging.info(overflowing_dumpster.getName() + "'s Thread")
+  # check if the dumpster state is 
   for component_name in environment_current_state.getCurrentState():
       if environment_current_state.type(component_name) == component_type.Truck:
           if environment_current_state.get(component_name, key="status") == TruckState.IDLE:
@@ -161,9 +163,19 @@ def manage_overflowing_dumpster (overflowing_dumpster, channel):
                       print path_information
                       data = json.dumps(path_information, indent = 4, sort_keys=True,cls=EnumEncoder)
                       # Send the route the desired routing key
-                      channel.basic_publish(exchange = "iDumpster_exchange", routing_key=component_name, body=data)
+                      publishing_message_broker = pika.BlockingConnection(pika_parameters)
+                      publishing_channel = publishing_message_broker.channel()
+                      logging.info("After Message broker")
+                      publishing_channel.exchange_declare(exchange='Truck_exchange', type='direct')
+                      result = publishing_channel.queue_declare(exclusive=True)
+                      queue_name = result.method.queue
+                      publishing_channel.basic_publish(exchange = "Truck_exchange", routing_key=component_name, body=data)
+                      publishing_channel.close()
+                      publishing_message_broker.close()
                       # print data
                       logging.info("Calculated Path using A * search sent to the truck under consideration")
+                      with state_variable_lock:
+                          environment_current_state.update(overflowing_dumpster.getName(), "status", DumpsterState.ASSIGNED)
 
 
 def get_log_level(verbosity):
@@ -259,10 +271,24 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
         else:
             current_dumpster = Dumpster(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["capacity"], trash_level=status_msg["level"])
             logging.info("Storing dumpster data in the state variable")
-            environment_current_state.put(current_dumpster)
+            
+            if delivery_info.routing_key in environment_current_state.getCurrentState():
+                with state_variable_lock:
+                    environment_current_state.update(delivery_info.routing_key, "location", status_msg["location"])
+                    environment_current_state.update(delivery_info.routing_key, "trash_capacity", status_msg["capacity"])
+                    environment_current_state.update(delivery_info.routing_key, "trash_level", status_msg["level"])
+                logging.info("Updates Made")
+            else:
+                with state_variable_lock:
+                    environment_current_state.put(current_dumpster)
+                logging.info("New dumpster added")
 
-            if current_dumpster.getTrashLevel() > current_dumpster.ThresholdLevel:
-                threading.Thread(target=manage_overflowing_dumpster, args=(current_dumpster, channel)).start()
+            if environment_current_state.get(current_dumpster.getName(), key="status") == DumpsterState.UNASSIGNED:
+                if current_dumpster.getTrashLevel() > current_dumpster.ThresholdLevel:
+                    threading.Thread(target=manage_overflowing_dumpster, args=(current_dumpster, )).start()
+            else:
+                logging.info("Dumpster already assigned for trash collection")
+                # print "Found one overflowing dumpster"
 
     elif status_msg["type"] == component_type.Truck:
         logging.info(delivery_info.routing_key + "'s Message Received")
@@ -281,8 +307,9 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
         else:
             current_truck = Truck(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["trash_capacity"], trash_level=status_msg["trash_level"], fuel_level=status_msg["fuel_level"], fuel_capacity=status_msg["fuel_capacity"], status=status_msg["status"])
             logging.info("Storing truck data in the state variable")
-            environment_current_state.put(current_truck)
-            all_trucks_state[delivery_info.routing_key] = status_msg["status"]
+            with state_variable_lock:
+                environment_current_state.put(current_truck)
+            # all_trucks_state[delivery_info.routing_key] = status_msg["status"]
     else:
         logging.warning("Ignoring message: Unknown type message received")
 
@@ -291,6 +318,8 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
     logging.warning("Discarding Message: received message couldn't be parsed")
   except NameError, ne:
     logging.error("Name Error has occured " + str(ne.message))
+  except AttributeError, ae:
+    logging.error("Attribute Error has occured " + str(ae.message))
   except Exception, eee:
     logging.error("Unknown Error has occured " + str(eee.message))
 
@@ -336,7 +365,7 @@ try:
 
   # Truck State (IDLE or BUSY)
 
-  all_trucks_state = {}
+  # all_trucks_state = {}
 
   # Bryse Flowers verbosity level code
 
@@ -357,6 +386,8 @@ try:
 
     pika_parameters = pika.ConnectionParameters(host=host, virtual_host=vhost, credentials=credentials)
     message_broker = pika.BlockingConnection(pika_parameters)
+
+    logging.info(message_broker)
 
     logging.info("A blocking connection named message_broker successfully created, now creating a channel")
 
@@ -399,6 +430,7 @@ try:
 
     # Start pika's event loop
     logging.info("Pika's event loop started")
+    # channel.start_consuming()
     pika_thread = threading.Thread(target=channel.start_consuming)
     pika_thread.start()
 

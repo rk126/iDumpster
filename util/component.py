@@ -88,6 +88,10 @@ class TruckState(Enum):
     IDLE = 0
     BUSY = 1
 
+class DumpsterState(Enum):
+    UNASSIGNED = 0
+    ASSIGNED = 1
+
 class State:
     def __init__(self):
         self.__state = {}
@@ -107,11 +111,7 @@ class State:
         if component_name not in self.__state:
             print "ERROR: Updating component that is not present in the current state"
         else:
-            if key == "location":
-                self.__state[component_name][key]["x"] = value[0]
-                self.__state[component_name][key]["y"] = value[1]
-            else:
-                self.__state[component_name][key] = value
+            self.__state[component_name][key] = value
 
     def get(self, component_name, **optional_parameters):
         if component_name not in self.__state:
@@ -180,7 +180,7 @@ for creating dumpster and maintaining the state of the dumpsters
 """
 
 class Dumpster:
-    __info = {"location": {"x": None, "y": None}, "type": component_type.Dumpster}
+    __info = {"location": {"x": None, "y": None}, "type": component_type.Dumpster, "status": DumpsterState.UNASSIGNED}
     ThresholdLevel = 5
     def __init__(self, name, location, trash_capacity, trash_level):
         self.__info["name"] = name

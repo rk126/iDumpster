@@ -28,39 +28,79 @@ from util.component import as_enum
 publish_levels = True
 prev_sensor_value = 0
 
+class truckChannelHelper:
+    """
+    This helper class is used to manage a subscribing_channel and invoke handlers when signals are intercepted
+
+    """
+
+    def __init__(self, channel):
+        """
+        Create a new truckChannelHelper object
+
+        :param channel: (pika.channel.Channel) The channel object to manage
+        :raises ValueError: If channel does not appear to be valid
+        :return: None
+        """
+
+        if isinstance(channel, pika.channel.Channel):
+            self.__channel = channel
+
+        else:
+            raise ValueError("No valid channel to manage was passed in")
+
+    def stop_truck_service(self, signal=None, frame=None):
+        """
+        Stops the pika event loop for the managed channel
+
+        :param signal: (int) A number if a intercepted signal caused this handler to be run, otherwise None
+        :param frame: A Stack Frame object, if an intercepted signall caused this handler to be run
+        :return None
+        """
+        # Attempt to gracefully stop pika's event loop whenever a SIGINT is encountered
+        # Subscribing loop is stopped by calling stop_consuming method of that respective channel
+        self.__channel.stop_consuming()
+        
+        # Publishing loop is stopped by changing the global flag publish_levels which will stop publishing
+        global publish_levels
+        publish_levels = False
+
+
+
+def publish_truck_status():
+    data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
+    publishing_channel.basic_publish(exchange = 'iDumpster_exchange', routing_key = topic,
+                                  body = data)
+    print "Sent: ", data
+
+    # Sleep and then loop
+    message_broker.add_timeout(2, publish_truck_status)
+
 def receive_path_info(channel, delivery_info, msg_properties, msg):
     # if msg == None:
     #     return
-    try:
-        recv_path_msg = json.loads(msg, object_hook=as_enum)
+    condition = msg != ""
+    print msg
+    print condition
+    if msg is not "":
+        try:
+            recv_path_msg = json.loads(msg, object_hook=as_enum)
 
-        if "status" not in recv_path_msg:
-            print "Warning: Reply Message 'status' not found, Ignoring message"
-        elif "a_star_path" not in recv_path_msg:
-            print "Warning: Reply Message 'a_star_path' not found, Ignoring message"
-        else:
-            truck_data["status"] = recv_path_msg["status"]
-            print recv_path_msg["a_star_path"]
+            if "status" not in recv_path_msg:
+                print "Warning: Reply Message 'status' not found, Ignoring message"
+            elif "a_star_path" not in recv_path_msg:
+                print "Warning: Reply Message 'a_star_path' not found, Ignoring message"
+            else:
+                truck_data["status"] = recv_path_msg["status"]
+                print recv_path_msg["a_star_path"]
 
-    except ValueError, ve:
-        print "Warning: Discarding message: received message couldn't be parsed" + str(ve.message)
-    except NameError, ne:
-        print "Warning: Name error has occurred " + str(ne.message)
-    except Exception, eee:
-        print "Error: Unknown error has occurred " + str(eee.message)
+        except ValueError, ve:
+            print "Warning: Discarding message: received message couldn't be parsed" + str(ve.message)
+        except NameError, ne:
+            print "Warning: Name error has occurred " + str(ne.message)
+        except Exception, eee:
+            print "Error: Unknown error has occurred " + str(eee.message)
 
-def subscribing_path_info(truck_data, channel, topic):
-
-    # Create a queue
-
-    result = channel.queue_declare(exclusive=True)
-    queue_name = result.method.queue
-
-    with channel_lock:
-        channel.queue_bind(exchange='iDumpster_exchange', queue=queue_name, routing_key=topic)
-        channel.basic_consume(receive_path_info, queue=queue_name, no_ack=True)
-
-        channel.start_consuming()
 
 def stop_truck_service(signal, frame):
     """
@@ -74,6 +114,7 @@ def stop_truck_service(signal, frame):
     """
     global publish_levels
     publish_levels = False
+    # td.stop()
 
 def get_truck_status():
     """
@@ -186,29 +227,36 @@ try:
         print "Please fill up some fuel so that the truck can start"
         sys.exit(-1)
 
-    # Setup signal handlers to shutdown this app when SIGINT or SIGTERM is
-    # sent to this app
-    signal_num = signal.SIGINT
-    try:
-        signal.signal(signal_num, stop_truck_service)
-        signal_num = signal.SIGTERM
-        signal.signal(signal_num, stop_truck_service)
-
-    except ValueError, ve:
-        print "Warning: Graceful shutdown may not be possible: Unsupported " \
-                "Signal: " + signal_num
-
     try:
         # Connect to the message broker using the given broker address (host)
         # Use the virtual host (vhost) and credential information (credentials),
         # if provided
-        message_broker = pika.BlockingConnection(pika.ConnectionParameters(
-                         host,virtual_host=vhost,credentials=credentials))
-        # Setup the channel and exchange
-        channel = message_broker.channel()
-        channel.exchange_declare(exchange='iDumpster_exchange',type='direct')
+        pika_parameters = pika.ConnectionParameters(host=host,virtual_host=vhost,credentials=credentials)
 
-        channel_lock = threading.Lock()
+        message_broker = pika.BlockingConnection(pika_parameters)
+        
+
+        # Setup the channel and exchange
+        publishing_channel = message_broker.channel()
+        publishing_channel.exchange_declare(exchange='iDumpster_exchange',type='direct')
+
+        subscribing_channel = message_broker.channel()
+        subscribing_channel.exchange_declare(exchange='Truck_exchange',type='direct')
+
+        # td = Threaded_subscriber()
+
+        # Setup signal handlers to shutdown this app when SIGINT or SIGTERM is
+        # sent to this app
+        signal_num = signal.SIGINT
+        try:
+            subscribing_channel_manager = truckChannelHelper(subscribing_channel)
+            signal.signal(signal_num, subscribing_channel_manager.stop_truck_service)
+            signal_num = signal.SIGTERM
+            signal.signal(signal_num, subscribing_channel_manager.stop_truck_service)
+
+        except ValueError, ve:
+            print "Warning: Graceful shutdown may not be possible: Unsupported " \
+                "Signal: " + signal_num       
 
         # location = ','.join(location) #make location a string
         location_dict = {"x": int(location[0]), "y": int(location[1])}
@@ -217,22 +265,34 @@ try:
         truck_data["trash_level"] = trash_filled/float(trash_capacity) * 10.0
         truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 10.0
 
+        result = subscribing_channel.queue_declare(exclusive=True)
+        queue_name = result.method.queue
 
-        threading.Thread(target=subscribing_path_info, args=(truck_data, channel, topic)).start()
+        subscribing_channel.queue_bind(exchange='Truck_exchange', queue=queue_name, routing_key=topic)
+
+        # threading.Thread(target=subscribing_for_path_info, args=(truck_data, subscribing_channel, queue_name, topic)).start()
+
+        message_broker.add_timeout(2, publish_truck_status)
+
+        subscribing_channel.basic_consume(receive_path_info, queue=queue_name, no_ack=True)
+
+        subscribing_channel.start_consuming()
+
+        # td.start()
 
         # Loop until the application is asked to quit
 
-        while(publish_levels):
-            #   Publish the message (truck_msg) in JSON format to the
-            #   broker under the user specified topic.
-            #   cls=EnumEncoder from stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
-            data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
-            channel.basic_publish(exchange = 'iDumpster_exchange', routing_key = topic,
-                                  body = data)
-            print "Sent: ", data
+        # while(publish_levels):
+        #     #   Publish the message (truck_msg) in JSON format to the
+        #     #   broker under the user specified topic.
+        #     #   cls=EnumEncoder from stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
+        #     data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
+        #     publishing_channel.basic_publish(exchange = 'iDumpster_exchange', routing_key = topic,
+        #                           body = data)
+        #     # print "Sent: ", data
 
-            # Sleep and then loop
-            time.sleep(2.0)
+        #     # Sleep and then loop
+        #     time.sleep(2.0)
 
     except pika.exceptions.ProbableAccessDeniedError, pade:
         print >> sys.stderr, "Error: A Probable Access Denied Error occured: " + str(pade.message)
@@ -260,8 +320,10 @@ try:
     finally:
         # Attempt to gracefully shutdown the connection to the message broker
         print "Application Shutting Down..."
-        if channel is not None:
-            channel.close()
+        if publishing_channel is not None:
+            publishing_channel.close()
+        if subscribing_channel is not None:
+            subscribing_channel.close()
         if message_broker is not None:
             message_broker.close()
         sys.exit()
