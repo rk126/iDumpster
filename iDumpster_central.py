@@ -86,7 +86,7 @@ def getJSONTrucks ():
   all_component_names = current_state.keys()
   for component in all_component_names:
     if current_state[component]["type"] == component_type.Truck:
-      Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level'])])
+      Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']/10.0), ('trash_level', current_state[component]['trash_level']/10.0)])
       JSONTrucks.append(Truck_dict)
 
   return json.dumps(JSONTrucks, cls=EnumEncoder)
