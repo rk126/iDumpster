@@ -40,6 +40,8 @@ from util.grid_structs import FUEL_COST_PER_BLOCK
 # A * search algorithm
 from a_star.path_finder import A_Star_Search
 
+# Web Server
+from www import web_server
 
 class iDumpsterServerChannelHelper:
   """
@@ -83,8 +85,8 @@ def getJSONTrucks ():
     if current_state[component]["type"] == component_type.Truck:
       Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level'])])
       JSONTrucks.append(Truck_dict)
-  
-  return JSONTrucks
+
+  return json.dumps(JSONTrucks)
 
 def getJSONDumpsters ():
   """
@@ -97,8 +99,8 @@ def getJSONDumpsters ():
     if current_state[component]["type"] == component_type.Dumpster:
       Dumpster_dict = dict([('name', component), ('location', current_state[component]['location']), ('trash_level', current_state[component]['trash_level'])])
       JSONDumpsters.append(Dumpster_dict)
-  
-  return JSONDumpsters
+
+  return json.dumps(JSONDumpsters)
 
 def getJSONMap ():
   """
@@ -397,8 +399,14 @@ try:
 
     # Start pika's event loop
     logging.info("Pika's event loop started")
+    pika_thread = threading.Thread(target=channel.start_consuming)
+    pika_thread.start()
 
-    channel.start_consuming()
+    # Start HTTP Server in a Seperate Thread
+    logging.info("Going into beast mode with Flask Server and JS Goodness")
+    web_server.start(dumpster_cb=getJSONDumpsters,
+                     truck_cb=getJSONTrucks)
+
 
   except pika.exceptions.ProbableAccessDeniedError, pade:
     logging.error("A Probable Access Denied Error occurred: " + str(pade.message))
@@ -426,6 +434,7 @@ try:
     logging.error("An unexpected exception occurred: " + str(eee.message))
 
   finally:
+    pika_thread.stop()
     # Attempt to gracefully shutdown the connection to the message broker
     # Closing the channel gracefully
     if channel is not None:
