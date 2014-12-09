@@ -36,7 +36,7 @@ def string_grid(graph, **style):
   ret_val = ""
   for y in range(graph.height):
     for x in range(graph.width):
-      ret_val += draw_tile(graph, (x, y), style, 1)
+      ret_val += draw_tile(graph, (x, y), style, 1) + " "
     ret_val += "\n"
   return ret_val
 
