@@ -89,7 +89,7 @@ def getJSONTrucks ():
       Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level'])])
       JSONTrucks.append(Truck_dict)
 
-  return json.dumps(JSONTrucks)
+  return json.dumps(JSONTrucks, cls=EnumEncoder)
 
 def getJSONDumpsters ():
   """
@@ -127,7 +127,7 @@ def manage_overflowing_dumpster (overflowing_dumpster):
 
   """
   logging.info(overflowing_dumpster.getName() + "'s Thread")
-  # check if the dumpster state is 
+  # check if the dumpster state is
   for component_name in environment_current_state.getCurrentState():
       if environment_current_state.type(component_name) == component_type.Truck:
           if environment_current_state.get(component_name, key="status") == TruckState.IDLE:
@@ -272,7 +272,7 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
         else:
             current_dumpster = Dumpster(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["capacity"], trash_level=status_msg["level"])
             logging.info("Storing dumpster data in the state variable")
-            
+
             if delivery_info.routing_key in environment_current_state.getCurrentState():
                 with state_variable_lock:
                     environment_current_state.update(delivery_info.routing_key, "location", status_msg["location"])

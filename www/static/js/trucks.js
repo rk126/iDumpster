@@ -8,8 +8,8 @@ var Truck = React.createClass({
         <td>{this.props.name}</td>
         <td>{this.props.location.x}, {this.props.location.y}</td>
         <td>{this.props.status}</td>
-        <td>{this.props.fuel}</td>
-        <td>{this.props.trash}</td>
+        <td>{this.props.fuel}0%</td>
+        <td>{this.props.trash}0%</td>
       </tr>
     );
   }
