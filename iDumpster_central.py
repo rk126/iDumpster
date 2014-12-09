@@ -36,6 +36,8 @@ from util.component import MapEncoder
 
 from util.grid_structs import GridWithWeights
 
+from util.grid_structs import string_grid
+
 from util.grid_structs import FUEL_COST_PER_BLOCK
 
 # A * search algorithm
@@ -107,8 +109,7 @@ def getJSONMap ():
   """
   Used by the web_server application to get the latest map information, for rendering it in the web page
   """
-  json_map_data = json.dumps(environment_map, cls=MapEncoder)
-  return json_map_data
+  return string_grid(environment_map.graph)
 
 
 def manhattan_distance(start_loc, end_loc):
@@ -437,7 +438,8 @@ try:
     # Start HTTP Server in a Seperate Thread
     logging.info("Going into beast mode with Flask Server and JS Goodness")
     web_server.start(dumpster_cb=getJSONDumpsters,
-                     truck_cb=getJSONTrucks)
+                     truck_cb=getJSONTrucks,
+                     map_cb=getJSONMap)
 
 
   except pika.exceptions.ProbableAccessDeniedError, pade:
