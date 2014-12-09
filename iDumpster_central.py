@@ -109,7 +109,10 @@ def getJSONMap ():
   """
   Used by the web_server application to get the latest map information, for rendering it in the web page
   """
-  return string_grid(environment_map.graph)
+  return string_grid(environment_map.graph,
+                     environment_current_state.getCurrentState(),
+                     component_type.Truck,
+                     component_type.Dumpster)
 
 
 def manhattan_distance(start_loc, end_loc):

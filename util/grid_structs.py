@@ -10,7 +10,7 @@ FUEL_COST_PER_BLOCK = 1
 
 # Utility functions for dealing with square grids
 
-def draw_tile(graph, id, style, width):
+def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list()):
   r = "-"
   if 'number' in style and id in style['number']: r = "%d" %(style['number'][id])
   if 'point_to' in style and style['point_to'].get(id, None) is not None:
@@ -23,7 +23,9 @@ def draw_tile(graph, id, style, width):
   if 'start' in style and id == style['start']: r = "T"
   elif 'goal' in style and id == style['goal']: r = "D"
   elif 'path' in style and id in style['path']: r = "@"
-  if id in graph.walls: r = "#" # * width
+  elif id in truck_loc: r = "T"
+  elif id in dumps_loc: r = "D"
+  elif id in graph.walls: r = "#" # Use elif so walls don't overwrite others
   return r
 
 def draw_grid(graph, width=2, **style):
@@ -32,12 +34,27 @@ def draw_grid(graph, width=2, **style):
       print "%%-%ds" % width % draw_tile(graph, (x, y), style, width),
     print ""
 
-def string_grid(graph, **style):
+def string_grid(graph, state, t_truck, t_dumps, **style):
   ret_val = ""
+  dumps_loc = []
+  truck_loc = []
+
+  # Preprocess Components to get locations of trucks/dumpsters
+  for component in state.values():
+    if component["type"] == t_dumps:
+      dumps_loc.append((component["location"]["x"], component["location"]["y"]))
+    elif component["type"] == t_truck:
+      truck_loc.append((component["location"]["x"], component["location"]["y"]))
+
+  print("Trucks is: " + str(truck_loc))
+  print("Dumps is: " + str(dumps_loc))
+
+  # Draw each point on the map
   for y in range(graph.height):
     for x in range(graph.width):
-      ret_val += draw_tile(graph, (x, y), style, 1) + " "
+      ret_val += draw_tile(graph, (x, y), style, 1, truck_loc, dumps_loc) + " "
     ret_val += "\n"
+
   return ret_val
 
 class SquareGrid(object):
