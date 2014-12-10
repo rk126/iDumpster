@@ -92,6 +92,7 @@ def receive_path_info(channel, delivery_info, msg_properties, msg):
                 print "Warning: Reply Message 'a_star_path' not found, Ignoring message"
             else:
                 truck_data["status"] = recv_path_msg["status"]
+                truck_data["a_star_path"] = recv_path_msg["a_star_path"]
                 print recv_path_msg["a_star_path"]
 
         except ValueError, ve:
@@ -261,7 +262,7 @@ try:
         # location = ','.join(location) #make location a string
         location_dict = {"x": int(location[0]), "y": int(location[1])}
         # Create a data structure to hold the dumpster data
-        truck_data = {'status': TruckState.IDLE, 'trash_capacity': trash_capacity, 'fuel_capacity': fuel_capacity, 'fuel_level': None, "trash_level": None, 'location': location_dict, 'type': component_type.Truck}
+        truck_data = {'status': TruckState.IDLE, 'trash_capacity': trash_capacity, 'fuel_capacity': fuel_capacity, 'fuel_level': None, "trash_level": None, 'location': location_dict, 'type': component_type.Truck, 'a_star_path': []}
         truck_data["trash_level"] = trash_filled/float(trash_capacity) * 10.0
         truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 10.0
 

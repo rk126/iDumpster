@@ -10,7 +10,7 @@ FUEL_COST_PER_BLOCK = 1
 
 # Utility functions for dealing with square grids
 
-def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list()):
+def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list(), a_star_path=list()):
   r = "-"
   if 'number' in style and id in style['number']: r = "%d" %(style['number'][id])
   if 'point_to' in style and style['point_to'].get(id, None) is not None:
@@ -26,6 +26,7 @@ def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list()):
   elif id in truck_loc: r = "T"
   elif id in dumps_loc: r = "D"
   elif id in graph.walls: r = "#" # Use elif so walls don't overwrite others
+  elif id in a_star_path: r = "*"
   return r
 
 def draw_grid(graph, width=2, **style):
@@ -45,14 +46,17 @@ def string_grid(graph, state, t_truck, t_dumps, **style):
       dumps_loc.append((component["location"]["x"], component["location"]["y"]))
     elif component["type"] == t_truck:
       truck_loc.append((component["location"]["x"], component["location"]["y"]))
+      if len(component["a_star_path"]) > 0:
+        a_star_path = component["a_star_path"]
 
   print("Trucks is: " + str(truck_loc))
   print("Dumps is: " + str(dumps_loc))
+  print("Path is: " + str(a_star_path))
 
   # Draw each point on the map
   for y in range(graph.height):
     for x in range(graph.width):
-      ret_val += draw_tile(graph, (x, y), style, 1, truck_loc, dumps_loc) + " "
+      ret_val += draw_tile(graph, (x, y), style, 1, truck_loc, dumps_loc, a_star_path) + " "
     ret_val += "\n"
 
   return ret_val

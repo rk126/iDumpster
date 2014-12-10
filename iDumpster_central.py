@@ -115,6 +115,17 @@ def getJSONMap ():
                      component_type.Dumpster)
 
 
+def toListOfTuples(listOfList):
+  if isinstance(listOfList, list):
+    listOfTuples = []
+    if len(listOfList) > 0:
+      for loc in listOfList:
+        listOfTuples.append(tuple(loc))
+    return listOfTuples
+  else:
+    logging.error("Argument should be a list of list")
+    return []
+
 def manhattan_distance(start_loc, end_loc):
   """
   Calculate Manhattan distance
@@ -308,11 +319,16 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
             logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'fuel_level' field")
         elif "status" not in status_msg:
             logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'status' field")
+        elif "a_star_path" not in status_msg:
+            logging.warning("Ignoring " + delivery_info.routing_key + "'s message: Missing 'a_star_path' field")
         else:
             current_truck = Truck(name=delivery_info.routing_key, location=status_msg["location"], trash_capacity=status_msg["trash_capacity"], trash_level=status_msg["trash_level"], fuel_level=status_msg["fuel_level"], fuel_capacity=status_msg["fuel_capacity"], status=status_msg["status"])
             logging.info("Storing truck data in the state variable")
             with state_variable_lock:
                 environment_current_state.put(current_truck)
+            path_info = toListOfTuples(status_msg["a_star_path"])
+            with state_variable_lock:
+                environment_current_state.update(current_truck.getName(), "a_star_path", path_info)
             # all_trucks_state[delivery_info.routing_key] = status_msg["status"]
     else:
         logging.warning("Ignoring message: Unknown type message received")
