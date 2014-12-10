@@ -47,7 +47,7 @@ def string_grid(graph, state, t_truck, t_dumps, **style):
       dumps_loc.append((component["location"]["x"], component["location"]["y"]))
     elif component["type"] == t_truck:
       truck_loc.append((component["location"]["x"], component["location"]["y"]))
-      if len(component["a_star_path"]) > 0:
+      if len(component.get("a_star_path", list())) > 0:
         a_star_path = component["a_star_path"]
 
   # Draw each point on the map
