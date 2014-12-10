@@ -39,6 +39,7 @@ def string_grid(graph, state, t_truck, t_dumps, **style):
   ret_val = ""
   dumps_loc = []
   truck_loc = []
+  a_star_path = []
 
   # Preprocess Components to get locations of trucks/dumpsters
   for component in state.values():
@@ -48,10 +49,6 @@ def string_grid(graph, state, t_truck, t_dumps, **style):
       truck_loc.append((component["location"]["x"], component["location"]["y"]))
       if len(component["a_star_path"]) > 0:
         a_star_path = component["a_star_path"]
-
-  print("Trucks is: " + str(truck_loc))
-  print("Dumps is: " + str(dumps_loc))
-  print("Path is: " + str(a_star_path))
 
   # Draw each point on the map
   for y in range(graph.height):
