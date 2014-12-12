@@ -226,7 +226,7 @@ def get_credentials(cred_cmd):
     match = re.search(cred_re, cred_cmd)
 
     if match:
-      return pika.PlainCredentials(match.group("un"), match.group("pw"), True)
+      return pika.PlainCredentials(match.group("un"), match.group("pw"), False)
 
     else:
       raise RuntimeError("Credentials Failed Regex Validation")
