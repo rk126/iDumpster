@@ -68,7 +68,18 @@ class truckChannelHelper:
 
 
 def publish_truck_status():
-    data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format
+    #if there is an a_star_path, drive the truck to the dumpster(s)
+    if truck_data["a_star_path"]:
+        point = truck_data["a_star_path"][0] #first tuple in list
+        location = []
+        location.append(point[0])
+        location.append(point[1])
+        location_dict = {"x": int(location[0]), "y": int(location[1])}
+        truck_data['location']=location_dict #update truck location
+        del truck_data["a_star_path"][0] #delete first tuple
+        truck_data["fuel_level"] = truck_data["fuel_level"]-1 #subtract fuel
+        
+    data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format     
     publishing_channel.basic_publish(exchange = 'iDumpster_exchange', routing_key = topic,
                                   body = data)
     print "Sent: ", data
@@ -262,7 +273,10 @@ try:
         # location = ','.join(location) #make location a string
         location_dict = {"x": int(location[0]), "y": int(location[1])}
         # Create a data structure to hold the dumpster data
-        truck_data = {'status': TruckState.IDLE, 'trash_capacity': trash_capacity, 'fuel_capacity': fuel_capacity, 'fuel_level': None, "trash_level": None, 'location': location_dict, 'type': component_type.Truck, 'a_star_path': []}
+        truck_data = {'status': TruckState.IDLE, 'trash_capacity': trash_capacity,
+                      'fuel_capacity': fuel_capacity, 'fuel_level': fuel_filled,
+                      "trash_level": None, 'location': location_dict,
+                      'type': component_type.Truck, 'a_star_path': []}
         truck_data["trash_level"] = trash_filled/float(trash_capacity) * 10.0
         truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 10.0
 
@@ -274,7 +288,7 @@ try:
         # threading.Thread(target=subscribing_for_path_info, args=(truck_data, subscribing_channel, queue_name, topic)).start()
 
         message_broker.add_timeout(2, publish_truck_status)
-
+        
         subscribing_channel.basic_consume(receive_path_info, queue=queue_name, no_ack=True)
 
         subscribing_channel.start_consuming()
