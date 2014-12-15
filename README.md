@@ -13,6 +13,14 @@ Intelligent Dumpster Sensing and Truck Routing Demo
 - enum34
 
     - sudo pip install enum34
+    
+- i2c-tools
+- 
+    - sudo apt-get install i2c-tools
+
+- python-smbus
+
+    - sudo apt-get python-smbus
 
 # Usage
 
@@ -59,9 +67,9 @@ optional arguments:
 
     -y y, --locy y        Fake location of the dumpster on y axis
 
-    iDumpster_central.py [-h] -b message broker [-p virtual host]
+iDumpster_central.py [-h] -b message broker [-p virtual host]
 
-                         [-c login:password] -k routing key
+                    [-c login:password] -k routing key
 
 optional arguments:
 
