@@ -86,7 +86,7 @@ def getJSONTrucks ():
   all_component_names = current_state.keys()
   for component in all_component_names:
     if current_state[component]["type"] == component_type.Truck:
-      Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level']/10.0)])
+      Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level'])])
       JSONTrucks.append(Truck_dict)
 
   return json.dumps(JSONTrucks, cls=EnumEncoder)
@@ -149,7 +149,7 @@ def manage_overflowing_dumpster (overflowing_dumpster):
               # see if that is greater current dumpster's trash
               current_truck_trash_level = environment_current_state.get(component_name, key="trash_level")
               current_truck_trash_capacity = environment_current_state.get(component_name, key="trash_capacity")
-              current_truck_trash_collected = current_truck_trash_level / 10.0 * current_truck_trash_capacity
+              current_truck_trash_collected = current_truck_trash_level * current_truck_trash_capacity
               overflowing_dumpster_trash_content = overflowing_dumpster.getTrashCollected()
               if current_truck_trash_collected + overflowing_dumpster_trash_content < current_truck_trash_capacity:
                   # Calculate the fuel estimate for the round trip and see if the truck

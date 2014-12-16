@@ -58,8 +58,8 @@ class MapEncoder(json.JSONEncoder):
 
 def as_map(d):
     """ Object hook for loading json data of Map object.
-    Took help of http://stackoverflow.com/questions/988228/converting-a-string-to-dictionary 
-    Here we first re-convert our string type to dictionary and return a Map object with the 
+    Took help of http://stackoverflow.com/questions/988228/converting-a-string-to-dictionary
+    Here we first re-convert our string type to dictionary and return a Map object with the
     data exactly matching with the received json map data.
     """
     if "__map__" in d:
@@ -181,7 +181,7 @@ for creating dumpster and maintaining the state of the dumpsters
 
 class Dumpster:
     __info = {"location": {"x": None, "y": None}, "type": component_type.Dumpster, "status": DumpsterState.UNASSIGNED}
-    ThresholdLevel = 5
+    ThresholdLevel = 0.6
     def __init__(self, name, location, trash_capacity, trash_level):
         self.__info["name"] = name
         self.__info["location"]["x"] = location["x"]
