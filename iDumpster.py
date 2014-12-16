@@ -158,7 +158,6 @@ try:
             #read sensor level
             level = read_Sensor()
             dumpster_data['level'] = level
-            time.sleep(2)
 
             #   Publish the message in JSON format to the
             #   broker under the user specified topic.
