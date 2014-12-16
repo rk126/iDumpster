@@ -86,7 +86,7 @@ def getJSONTrucks ():
   all_component_names = current_state.keys()
   for component in all_component_names:
     if current_state[component]["type"] == component_type.Truck:
-      Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']/10.0), ('trash_level', current_state[component]['trash_level']/10.0)])
+      Truck_dict = dict([('name', component), ('location', current_state[component]['location']), ('status', current_state[component]['status']), ('fuel_level', current_state[component]['fuel_level']), ('trash_level', current_state[component]['trash_level']/10.0)])
       JSONTrucks.append(Truck_dict)
 
   return json.dumps(JSONTrucks, cls=EnumEncoder)
@@ -157,7 +157,7 @@ def manage_overflowing_dumpster (overflowing_dumpster):
                   current_truck_loc = environment_current_state.get(component_name, key="location")
                   current_truck_fuel_level = environment_current_state.get(component_name, key="fuel_level")
                   current_truck_fuel_capacity = environment_current_state.get(component_name, key="fuel_capacity")
-                  current_truck_fuel_left = current_truck_fuel_level/10.0 * current_truck_fuel_capacity
+                  current_truck_fuel_left = current_truck_fuel_level/100.0 * current_truck_fuel_capacity
                   overflowing_dumpster_loc = overflowing_dumpster.getLocation()
                   estimated_distance = manhattan_distance(current_truck_loc, overflowing_dumpster_loc)
                   # Assuming unit fuel consumed for unit distance
