@@ -77,6 +77,8 @@ def publish_truck_status():
         location_dict = {"x": int(location[0]), "y": int(location[1])}
         truck_data['location']=location_dict #update truck location
         del truck_data["a_star_path"][0] #delete first tuple
+        global fuel_filled
+        print "80", fuel_filled
         fuel_filled = fuel_filled -1
         truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 100.0 #subtract fuel
         
@@ -217,6 +219,7 @@ try:
     trash_capacity = args.trash_capacity
     fuel_capacity = args.fuel_capacity
     fuel_filled = args.fuel_filled
+    print "221",fuel_filled
     trash_filled = args.trash_filled
     location = [str(args.locx), str(args.locy)]
 
@@ -274,6 +277,7 @@ try:
         # location = ','.join(location) #make location a string
         location_dict = {"x": int(location[0]), "y": int(location[1])}
         # Create a data structure to hold the dumpster data
+        print "279", fuel_filled
         truck_data = {'status': TruckState.IDLE, 'trash_capacity': trash_capacity,
                       'fuel_capacity': fuel_capacity, 'fuel_level': fuel_filled,
                       "trash_level": None, 'location': location_dict,

@@ -16,11 +16,13 @@ import sys
 import os
 import logging
 import threading
+import time
 
 # Components in the system
 from util.component import Map
 from util.component import Truck
 from util.component import Dumpster
+from util.component import Landfill
 from util.component import State
 
 # Enumeration class types
@@ -112,7 +114,7 @@ def getJSONMap ():
   return string_grid(environment_map.graph,
                      environment_current_state.getCurrentState(),
                      component_type.Truck,
-                     component_type.Dumpster)
+                     component_type.Dumpster, landfill_loc=[map_landfill.getLocation()])
 
 
 def toListOfTuples(listOfList):
@@ -142,55 +144,96 @@ def manage_overflowing_dumpster (overflowing_dumpster):
   """
   logging.info(overflowing_dumpster.getName() + "'s Thread")
   # check if the dumpster state is
-  for component_name in environment_current_state.getCurrentState():
-      if environment_current_state.type(component_name) == component_type.Truck:
-          if environment_current_state.get(component_name, key="status") == TruckState.IDLE:
-              # Calculate the trash capacity - trash collected by truck so far and
-              # see if that is greater current dumpster's trash
-              current_truck_trash_level = environment_current_state.get(component_name, key="trash_level")
-              current_truck_trash_capacity = environment_current_state.get(component_name, key="trash_capacity")
-              current_truck_trash_collected = current_truck_trash_level * current_truck_trash_capacity
-              overflowing_dumpster_trash_content = overflowing_dumpster.getTrashCollected()
-              if current_truck_trash_collected + overflowing_dumpster_trash_content < current_truck_trash_capacity:
-                  # Calculate the fuel estimate for the round trip and see if the truck
-                  # has that much amount of fuel left to go for a drive
-                  current_truck_loc = environment_current_state.get(component_name, key="location")
-                  current_truck_fuel_level = environment_current_state.get(component_name, key="fuel_level")
-                  current_truck_fuel_capacity = environment_current_state.get(component_name, key="fuel_capacity")
-                  current_truck_fuel_left = current_truck_fuel_level/100.0 * current_truck_fuel_capacity
-                  overflowing_dumpster_loc = overflowing_dumpster.getLocation()
-                  estimated_distance = manhattan_distance(current_truck_loc, overflowing_dumpster_loc)
-                  # Assuming unit fuel consumed for unit distance
-                  # Also for round trip time, we consider 2 times the estimated distance
-                  estimated_fuel_consumed = FUEL_COST_PER_BLOCK * (estimated_distance * 2)
-                  if current_truck_fuel_left > estimated_fuel_consumed:
-                      # Create truck object
-                      logging.info("Creating " + component_name + " object to parse the information to the A * search")
-                      current_truck_selected = Truck(name=component_name, location={"x":current_truck_loc[0], "y": current_truck_loc[1]}, fuel_capacity=current_truck_fuel_capacity, fuel_level=current_truck_fuel_level, trash_capacity=current_truck_trash_capacity, trash_level=current_truck_trash_level, status=TruckState.BUSY)
-                      with state_variable_lock:
-                          environment_current_state.put(current_truck_selected)
-                      # Use A * search to get the route
-                      logging.info("Calculating " + component_name + " to " + overflowing_dumpster.getName() + " path")
-                      a_star_instance = A_Star_Search(environment_map.graph, current_truck_selected, overflowing_dumpster)
-                      a_star_path = a_star_instance.get_a_star_path()
-                      came_from = a_star_instance.get_came_from()
-                      path_information = {"status": TruckState.BUSY, "a_star_path": a_star_path}
-                      print path_information
-                      data = json.dumps(path_information, indent = 4, sort_keys=True,cls=EnumEncoder)
-                      # Send the route the desired routing key
-                      publishing_message_broker = pika.BlockingConnection(pika_parameters)
-                      publishing_channel = publishing_message_broker.channel()
-                      logging.info("After Message broker")
-                      publishing_channel.exchange_declare(exchange='Truck_exchange', type='direct')
-                      result = publishing_channel.queue_declare(exclusive=True)
-                      queue_name = result.method.queue
-                      publishing_channel.basic_publish(exchange = "Truck_exchange", routing_key=component_name, body=data)
-                      publishing_channel.close()
-                      publishing_message_broker.close()
-                      # print data
-                      logging.info("Calculated Path using A * search sent to the truck under consideration")
-                      with state_variable_lock:
-                          environment_current_state.update(overflowing_dumpster.getName(), "status", DumpsterState.ASSIGNED)
+  if (environment_current_state.get(overflowing_dumpster.getName(), key="status") == DumpsterState.UNASSIGNED) and ("assigned_to" not in environment_current_state.get(overflowing_dumpster.getName())):
+      with state_variable_lock:
+          environment_current_state.update(overflowing_dumpster.getName(), "status", DumpsterState.ASSIGNED)
+      for component_name in environment_current_state.getCurrentState():
+          print component_name
+          if environment_current_state.type(component_name) == component_type.Truck:
+              if (environment_current_state.get(component_name, key="status") == TruckState.IDLE) and ("assigned_to" not in environment_current_state.get(component_name)):
+                  # Calculate the trash capacity - trash collected by truck so far and
+                  # see if that is greater current dumpster's trash
+                  current_truck_trash_level = environment_current_state.get(component_name, key="trash_level")
+                  current_truck_trash_capacity = environment_current_state.get(component_name, key="trash_capacity")
+                  current_truck_trash_collected = current_truck_trash_level * current_truck_trash_capacity
+                  overflowing_dumpster_trash_content = overflowing_dumpster.getTrashCollected()
+                  if (current_truck_trash_collected + overflowing_dumpster_trash_content) < current_truck_trash_capacity:
+                      # Calculate the fuel estimate for the round trip and see if the truck
+                      # has that much amount of fuel left to go for a drive
+                      current_truck_loc = environment_current_state.get(component_name, key="location")
+                      current_truck_fuel_level = environment_current_state.get(component_name, key="fuel_level")
+                      current_truck_fuel_capacity = environment_current_state.get(component_name, key="fuel_capacity")
+                      current_truck_fuel_left = current_truck_fuel_level/100.0 * current_truck_fuel_capacity
+                      overflowing_dumpster_loc = overflowing_dumpster.getLocation()
+                      estimated_distance = manhattan_distance(current_truck_loc, overflowing_dumpster_loc)
+                      # Assuming unit fuel consumed for unit distance
+                      # Also for round trip time, we consider 2 times the estimated distance
+                      estimated_fuel_consumed = FUEL_COST_PER_BLOCK * (estimated_distance * 2)
+                      if current_truck_fuel_left > estimated_fuel_consumed:
+                          with state_variable_lock:
+                              environment_current_state.update(overflowing_dumpster.getName(), "assigned_to", component_name)
+                              environment_current_state.update(component_name, "assigned_to", overflowing_dumpster.getName())                              
+                          # Create truck object
+                          logging.info("Creating " + component_name + " object to parse the information to the A * search")
+                          current_truck_selected = Truck(name=component_name, location={"x":current_truck_loc[0], "y": current_truck_loc[1]}, fuel_capacity=current_truck_fuel_capacity, fuel_level=current_truck_fuel_level, trash_capacity=current_truck_trash_capacity, trash_level=current_truck_trash_level, status=TruckState.BUSY)
+                          with state_variable_lock:
+                              environment_current_state.put(current_truck_selected)
+                          # Use A * search to get the route
+                          logging.info("Calculating " + component_name + " to " + overflowing_dumpster.getName() + " path")
+                          a_star_instance = A_Star_Search(environment_map.graph, current_truck_selected, overflowing_dumpster)
+                          a_star_path = a_star_instance.get_a_star_path()
+                          came_from = a_star_instance.get_came_from()
+                          path_information = {"status": TruckState.BUSY, "a_star_path": a_star_path}
+                          print path_information
+                          data = json.dumps(path_information, indent = 4, sort_keys=True,cls=EnumEncoder)
+                          # Send the route the desired routing key
+                          publishing_message_broker = pika.BlockingConnection(pika_parameters)
+                          publishing_channel = publishing_message_broker.channel()
+                          logging.info("After Message broker")
+                          publishing_channel.exchange_declare(exchange='Truck_exchange', type='direct')
+                          result = publishing_channel.queue_declare(exclusive=True)
+                          queue_name = result.method.queue
+                          publishing_channel.basic_publish(exchange = "Truck_exchange", routing_key=component_name, body=data)
+                          publishing_channel.close()
+                          publishing_message_broker.close()
+                          # print data
+                          logging.info("Calculated Path using A * search sent to the truck under consideration")
+                          break
+                          
+  elif environment_current_state.get(overflowing_dumpster.getName(), key="status") == DumpsterState.ASSIGNED and ("assigned_to" in environment_current_state.get(overflowing_dumpster.getName())):
+      truck_assigned = environment_current_state.get(overflowing_dumpster.getName(), key="assigned_to")
+      if environment_current_state.get(truck_assigned, key="status") == TruckState.BUSY:
+          if environment_current_state.get(truck_assigned, key="a_star_path") == []:
+              truck_assigned_loc = environment_current_state.get(truck_assigned, key="location")
+              truck_assigned_fuel_cap = environment_current_state.get(truck_assigned, key="fuel_capacity")
+              truck_assigned_fuel_lev = environment_current_state.get(truck_assigned, key="fuel_level")
+              truck_assigned_trash_cap = environment_current_state.get(truck_assigned, key="trash_capacity")
+              truck_assigned_trash_lev = environment_current_state.get(truck_assigned, key="trash_level")
+              truck_assigned_trash_collected = overflowing_dumpster.getTrashCollected() + truck_assigned_trash_cap * truck_assigned_trash_lev;
+              truck_assigned_trash_lev_new = truck_assigned_trash_collected/truck_assigned_trash_cap
+              current_truck_assigned = Truck(name=truck_assigned, location={"x": truck_assigned_loc[0], "y": truck_assigned_loc[1]}, fuel_capacity=truck_assigned_fuel_cap, fuel_level=truck_assigned_fuel_lev, trash_capacity=truck_assigned_trash_cap, trash_level=truck_assigned_trash_lev_new, status=TruckState.BUSY)
+              a_star_instance = A_Star_Search(environment_map.graph, current_truck_assigned, map_landfill)
+              a_star_path = a_star_instance.get_a_star_path()
+              came_from = a_star_instance.get_came_from()
+              path_information = {"status": TruckState.BUSY, "a_star_path": a_star_path}
+              print path_information
+              data = json.dumps(path_information, indent = 4, sort_keys=True,cls=EnumEncoder)
+              # Send the route the desired routing key
+              publishing_message_broker = pika.BlockingConnection(pika_parameters)
+              publishing_channel = publishing_message_broker.channel()
+              logging.info("After Message broker")
+              publishing_channel.exchange_declare(exchange='Truck_exchange', type='direct')
+              result = publishing_channel.queue_declare(exclusive=True)
+              queue_name = result.method.queue
+              time.sleep(5.0)
+              publishing_channel.basic_publish(exchange = "Truck_exchange", routing_key=truck_assigned, body=data)
+              with state_variable_lock:
+                  environment_current_state.remove(overflowing_dumpster.getName(), "assigned_to")
+                  environment_current_state.remove(truck_assigned, "assigned_to")
+                  environment_current_state.update(overflowing_dumpster.getName(), "status", DumpsterState.UNASSIGNED)
+              publishing_channel.close()
+              publishing_message_broker.close()
+              
 
 
 def get_log_level(verbosity):
@@ -298,13 +341,9 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
                     environment_current_state.put(current_dumpster)
                 logging.info("New dumpster added")
 
-            if environment_current_state.get(current_dumpster.getName(), key="status") == DumpsterState.UNASSIGNED:
-                if current_dumpster.getTrashLevel() > current_dumpster.ThresholdLevel:
-                    threading.Thread(target=manage_overflowing_dumpster, args=(current_dumpster, )).start()
-            else:
-                logging.info("Dumpster already assigned for trash collection")
-                # print "Found one overflowing dumpster"
-
+            if current_dumpster.getTrashLevel() > current_dumpster.ThresholdLevel:
+                threading.Thread(target=manage_overflowing_dumpster, args=(current_dumpster, )).start()
+            
     elif status_msg["type"] == component_type.Truck:
         logging.info(delivery_info.routing_key + "'s Message Received")
         if "trash_capacity" not in status_msg:
@@ -331,6 +370,13 @@ def monitor_components(channel, delivery_info, msg_properties, msg):
             with state_variable_lock:
                 environment_current_state.update(current_truck.getName(), "a_star_path", path_info)
             # all_trucks_state[delivery_info.routing_key] = status_msg["status"]
+            if status_msg["status"] == TruckState.BUSY:
+                if "assigned_to" in environment_current_state.get(current_truck.getName()):
+                    if current_truck.getLocation() == map_landfill.getLocation():
+                        logging.info("current_state IDLE of this truck")
+                        # with state_variable_lock:
+                        #     environment_current_state.update(current_truck.getName(), "status", TruckState.IDLE)
+
     else:
         logging.warning("Ignoring message: Unknown type message received")
 
@@ -395,6 +441,9 @@ try:
   logging.basicConfig(level=log_level, format=logging_format, datefmt=logging_date_format)
 
   environment_map = Map(width=m, height=n, template='TEMPLATE_1')
+
+  # Place landfill in (0, 0)
+  map_landfill = Landfill(0, 0)
 
   message_broker = None
   channel = None

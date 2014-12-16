@@ -83,6 +83,7 @@ def as_map(d):
 class component_type(Enum):
     Dumpster = 1
     Truck = 2
+    Landfill = 3
 
 class TruckState(Enum):
     IDLE = 0
@@ -142,6 +143,12 @@ class State:
     def type(self, component_name):
         return self.__state[component_name]["type"]
 
+    def remove(self, component_name, key):
+        if key in self.__state[component_name]:
+            del self.__state[component_name][key]
+        else:
+            print "ERROR: Component's field not present in the State object"
+
 class Map:
     def __init__(self, width=None, height=None, template=None):
         self.graph = GridWithWeights(width, height)
@@ -162,6 +169,15 @@ class Map:
                     if (x, y) not in self.graph.walls:
                         passable_nodes.append((x, y))
             self.graph.default_weights = {location: 0 for location in passable_nodes}
+
+            # Cleaning landfill location
+
+            for x in range(2):
+                for y in range(2):
+                    if (x, y) in self.graph.walls:
+                        self.graph.walls.remove((x, y))
+
+            # Landfill is at (0, 0)
 
             # TODO Adding distance weights
             # Diagonal movement costs 14 units and orthogonal movement costs 10 units
@@ -244,3 +260,14 @@ class Truck:
 
     def getStatus(self):
         return self.__info["status"]
+
+class Landfill:
+    # Landfill dictionary to store landfill information
+    __info = {"location": {"x": None, "y": None}, "type": component_type.Landfill}
+
+    def __init__(self, x, y):
+        self.__info["location"]["x"] = x
+        self.__info["location"]["y"] = y
+
+    def getLocation(self):
+        return (self.__info["location"]["x"], self.__info["location"]["y"])
