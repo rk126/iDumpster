@@ -77,11 +77,12 @@ def publish_truck_status():
         location_dict = {"x": int(location[0]), "y": int(location[1])}
         truck_data['location']=location_dict #update truck location
         del truck_data["a_star_path"][0] #delete first tuple
-        truck_data["fuel_level"] = truck_data["fuel_level"]-1 #subtract fuel
+        fuel_filled = fuel_filled -1
+        truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 10.0 #subtract fuel
         
     data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format     
-    publishing_channel.basic_publish(exchange = 'iDumpster_exchange', routing_key = topic,
-                                  body = data)
+    publishing_channel.basic_publish(exchange = 'iDumpster_exchange',
+                                     routing_key = topic, body = data)
     print "Sent: ", data
 
     # Sleep and then loop
