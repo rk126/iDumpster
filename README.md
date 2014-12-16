@@ -95,3 +95,6 @@ optional arguments:
 
                           broker
 
+Acknowledgements
+    - VCNL Sensor code modified from original author at:
+        https://github.com/adafruit/Adafruit-Raspberry-Pi-Python-Code/tree/master/Adafruit_VCNL4000
