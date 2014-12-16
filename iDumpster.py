@@ -48,7 +48,7 @@ def read_Sensor():
                 result = 0
         elif x >= 2290 and x <= 2399:
                 result = 0.33
-        elif x >= 2400 and x <= 2550:
+        elif x >= 2400 and x <= 2920:
                 result = 0.66
         elif x >= 2950:
                 result = 1
