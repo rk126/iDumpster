@@ -25,8 +25,8 @@ def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list(), a_sta
   elif 'path' in style and id in style['path']: r = "@"
   elif id in truck_loc: r = "T"
   elif id in dumps_loc: r = "D"
-  elif id in a_star_path: r = "*"
   elif id in landfill_loc: r = "L"
+  elif id in a_star_path: r = "*"
   elif id in graph.walls: r = "#" # Use elif so walls don't overwrite others
   return r
 
@@ -49,7 +49,8 @@ def string_grid(graph, state, t_truck, t_dumps, landfill_loc, **style):
     elif component["type"] == t_truck:
       truck_loc.append((component["location"]["x"], component["location"]["y"]))
       if len(component.get("a_star_path", list())) > 0:
-        a_star_path = component["a_star_path"]
+        a_star_path += component["a_star_path"]
+        print "A star Path component",a_star_path
 
   # Draw each point on the map
   for y in range(graph.height):
