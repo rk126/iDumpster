@@ -78,7 +78,7 @@ def publish_truck_status():
         truck_data['location']=location_dict #update truck location
         del truck_data["a_star_path"][0] #delete first tuple
         fuel_filled = fuel_filled -1
-        truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 10.0 #subtract fuel
+        truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 100.0 #subtract fuel
         
     data = json.dumps(truck_data,indent=4,sort_keys=True,cls=EnumEncoder)#put dict into JSON format     
     publishing_channel.basic_publish(exchange = 'iDumpster_exchange',
@@ -278,8 +278,8 @@ try:
                       'fuel_capacity': fuel_capacity, 'fuel_level': fuel_filled,
                       "trash_level": None, 'location': location_dict,
                       'type': component_type.Truck, 'a_star_path': []}
-        truck_data["trash_level"] = trash_filled/float(trash_capacity) * 10.0
-        truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 10.0
+        truck_data["trash_level"] = trash_filled/float(trash_capacity) * 100.0
+        truck_data["fuel_level"] = fuel_filled/float(fuel_capacity) * 100.0
 
         result = subscribing_channel.queue_declare(exclusive=True)
         queue_name = result.method.queue
