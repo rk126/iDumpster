@@ -40,13 +40,13 @@ def read_Sensor():
     :return: (val) The value returned will represent the level in the dumpster
     """
     global prev_sensor_value
-    result = prev_sensor_value + uniform(0, 0.75)
-    if result <= 10:
+    result = prev_sensor_value + uniform(0, 0.05)
+    if result <= 1:
       prev_sensor_value = result
       return result
     else:
       print "Overflowing Dumpster!"
-      return 10
+      return 1
 
 def get_credentials(cmd_cred):
     '''Translate a <username>:<password> string to a Pika credential'''

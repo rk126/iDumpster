@@ -10,7 +10,7 @@ FUEL_COST_PER_BLOCK = 1
 
 # Utility functions for dealing with square grids
 
-def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list(), a_star_path=list()):
+def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list(), a_star_path=list(), landfill_loc=list()):
   r = "-"
   if 'number' in style and id in style['number']: r = "%d" %(style['number'][id])
   if 'point_to' in style and style['point_to'].get(id, None) is not None:
@@ -25,8 +25,9 @@ def draw_tile(graph, id, style, width, truck_loc=list(), dumps_loc=list(), a_sta
   elif 'path' in style and id in style['path']: r = "@"
   elif id in truck_loc: r = "T"
   elif id in dumps_loc: r = "D"
-  elif id in graph.walls: r = "#" # Use elif so walls don't overwrite others
+  elif id in landfill_loc: r = "L"
   elif id in a_star_path: r = "*"
+  elif id in graph.walls: r = "#" # Use elif so walls don't overwrite others
   return r
 
 def draw_grid(graph, width=2, **style):
@@ -35,7 +36,7 @@ def draw_grid(graph, width=2, **style):
       print "%%-%ds" % width % draw_tile(graph, (x, y), style, width),
     print ""
 
-def string_grid(graph, state, t_truck, t_dumps, **style):
+def string_grid(graph, state, t_truck, t_dumps, landfill_loc, **style):
   ret_val = ""
   dumps_loc = []
   truck_loc = []
@@ -48,12 +49,13 @@ def string_grid(graph, state, t_truck, t_dumps, **style):
     elif component["type"] == t_truck:
       truck_loc.append((component["location"]["x"], component["location"]["y"]))
       if len(component.get("a_star_path", list())) > 0:
-        a_star_path = component["a_star_path"]
+        a_star_path += component["a_star_path"]
+        print "A star Path component",a_star_path
 
   # Draw each point on the map
   for y in range(graph.height):
     for x in range(graph.width):
-      ret_val += draw_tile(graph, (x, y), style, 1, truck_loc, dumps_loc, a_star_path) + " "
+      ret_val += draw_tile(graph, (x, y), style, 1, truck_loc, dumps_loc, a_star_path, landfill_loc) + " "
     ret_val += "\n"
 
   return ret_val
